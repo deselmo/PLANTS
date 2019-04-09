@@ -1,0 +1,16 @@
+{
+  "name": "plants",
+  "version": "0.0.0",
+  "bin": "./source",
+  "private": true,
+  "description": "Plants Laborsaving Automated Nurturing Tracking and Safeguarding",
+  "authors": [
+    "Andrea Bongiorno",
+    "Matteo Franceschi",
+    "William Guglielmo"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "microbit": "lancaster-university/microbit"
+  }
+}
