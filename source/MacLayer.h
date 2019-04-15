@@ -80,37 +80,37 @@ struct MacBuffer{
     uint8_t payload[MAC_LAYER_PAYLOAD_LENGTH];  // the payload of this packet
 };
 
-struct MacControlData{
-    uint64_t timestamp;
-    uint8_t frag;
-    uint8_t seq_number;
-};
 
 struct FragmentedPacket{
+    uint64_t timestamp;
     bool lastReceived;
     uint8_t packet_number;
-    MacBuffer *packets;
-};
-
-struct MacBufferReceived{
-    uint32_t source;
-    std::map<uint16_t, MacControlData *> packets;
+    uint16_t length;
+    std::vector<MacBuffer *> packets;
 };
 
 struct MacBufferFragmentReceived{
     uint32_t source;
-    std::map<uint16_t, FragmentedPacket *>packets;
+    std::map<uint8_t, FragmentedPacket *>fragmented;
+};
+
+struct MacBufferSent{
+    uint8_t seq_number;
+    uint8_t total;
+    uint8_t received;
 };
 
 class MacLayer : public MicroBitComponent{
+
+
     std::vector<MacBuffer *> outBuffer;                 // list of outgoing packets
-    std::vector<PacketBuffer *> inBuffer;               // list of completely received messages
+    std::vector<PacketBuffer> inBuffer;               // list of completely received messages
     MicroBit *uBit;                                     // Microbit
-    uint8_t seq_number;                                 // personal sequence number from 0-63
-    std::map<uint32_t, MacBufferFragmentReceived *> fragmented; 
+    uint8_t seq_number;                               // personal sequence number from 0-63
+    std::map<uint32_t, MacBufferFragmentReceived *> receive_buffer; 
     std::map<uint16_t, MacBuffer *> waiting;            // packets sent which we are waiting for an ack
-    std::map<uint32_t, MacBufferReceived *> recently_received;  // packets that have been recently received, used to avoid repetition
-    
+    std::map<uint8_t, MacBufferSent *> waiting_for_ack;
+    std::vector<uint32_t> disconnected_destination;
 
     /**
      * Create a list of MacBuffer from the buffer passed the list
@@ -200,9 +200,10 @@ class MacLayer : public MicroBitComponent{
      */
     void addToRecentlyReceived(MacBuffer *received);
     void addToFragmented(MacBuffer *fragment);
-    void addToDataReady(MacBuffer *packet);
+    void addToDataReady(FragmentedPacket *buf);
     void accomplishAck(MacBuffer *ack);
     bool isComplete(FragmentedPacket *fragmented);
+    bool isLast(MacBuffer *fragment);
     void orderPackets(FragmentedPacket *fragmented);
 
 
@@ -235,14 +236,26 @@ class MacLayer : public MicroBitComponent{
     uint16_t getHash(MacBuffer *buf);
 
 public:
+
+    //debug
+    int macbufferallocated;
+    int maccontroldata;
+    int macbuffersent;
+    int macbufferreceived;
+    int macbufferfragmentedreceived;
+    int fragmentedpacket;
+
     MacLayer(MicroBit* uBit);
     void init();
 
     int send(uint8_t *buffer, int len, uint32_t dest);
     int send(PacketBuffer data, uint32_t dest);
     int send(ManagedString s, uint32_t dest);
+    uint32_t getDisconnectedDestination();
     PacketBuffer recv();
     
+    int getPacketsInQueue();
+    void printToSerial(ManagedString s);
     virtual void systemTick();
 };
 
