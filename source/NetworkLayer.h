@@ -5,12 +5,14 @@
 #include "MacLayer.h"
 #include <map>
 #include <vector>
+#include <queue>
 
 #define NETWORK_BROADCAST 0
 
 #define NETWORK_NET_ID 42
 
 #define NETWORK_LAYER 421
+#define NETWORK_LAYER_PACKET_RECEIVED 23
 
 
 
@@ -41,7 +43,7 @@ struct DDPacket{
 
 class NetworkLayer : public MicroBitComponent{
     std::vector<DDPacket *> outBuffer;
-    std::vector<PacketBuffer *> inBuffer;
+    std::queue<PacketBuffer> inBuffer; // DD_DATA packets waiting to be processed by application level
     MicroBit *uBit;
     MacLayer *mac_layer;
     bool am_sink;
@@ -58,7 +60,10 @@ public:
     int send(uint8_t *buffer, int len);
     int send(PacketBuffer data);
     int send(ManagedString s);
-    PacketBuffer recv();
+
+    void recv_from_mac(MicroBitEvent e); // evt handler for MAC_LAYER_PACKET_RECEIVED events
+
+    PacketBuffer recv(); // interface provided to application layer
     
     virtual void systemTick();
 };
