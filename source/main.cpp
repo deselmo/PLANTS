@@ -2,6 +2,16 @@
 
 #include "MacLayer.h"
 
+/*
+message("omit frame pointer for bootloader startup asm")
+
+ if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+	set_source_files_properties(
+		"${CMAKE_CURRENT_LIST_DIR}/nordic_sdk/components/libraries/bootloader_dfu/bootloader_util.c"
+		PROPERTIES COMPILE_FLAGS -fomit-frame-pointer)
+endif()
+*/
+
 MicroBit uBit;
 MacLayer m(&uBit);
 
