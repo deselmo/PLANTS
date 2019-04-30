@@ -63,6 +63,7 @@ int MacLayer::send(uint8_t *buffer, int len, uint32_t dest){
     waiting_for_ack[seq_number-1] = sent;
     
 
+
     //outBuffer is empty
     if(outBuffer.empty())
     {
@@ -213,10 +214,11 @@ void MacLayer::recv_from_radio(MicroBitEvent){
     tmp += sizeof(uint8_t);
     memcpy(&(received->payload), payload+tmp, sizeof(uint8_t)*MAC_LAYER_PAYLOAD_LENGTH);
 
-
+    //printToSerial(ManagedString((int)received->source));
+    //printToSerial(ManagedString((int)received->destination));
     if(received->destination == microbit_serial_number())
     {
-
+        printToSerial("received for me");
         if(received->type == 0)
         {
             
@@ -281,10 +283,10 @@ void MacLayer::addToFragmented(MacBuffer *fragment){
         receive_buffer[fragment->source] = new MacBufferFragmentReceived;
         receive_buffer[fragment->source]->source = fragment->source;
     }
-    if(fragmented[fragment->source] == NULL)
+    if(receive_buffer[fragment->source] == NULL)
         printToSerial("MMMMMMMH");
-    MacBufferFragmentReceived *received_fragment = fragmented[fragment->source];
-    if(received_fragment->packets[fragment->seq_number] == NULL)
+    MacBufferFragmentReceived *received_fragment = receive_buffer[fragment->source];
+    if(received_fragment->fragmented[fragment->seq_number] == NULL)
     {
         fragmentedpacket++;
         FragmentedPacket *tmp = new FragmentedPacket;
@@ -292,11 +294,11 @@ void MacLayer::addToFragmented(MacBuffer *fragment){
         tmp->length = 0;
         tmp->packet_number = 0;
         tmp->timestamp = 0;
-        received_fragment->packets[fragment->seq_number] = tmp;        
+        received_fragment->fragmented[fragment->seq_number] = tmp;        
     }
-    if(received_fragment->packets[fragment->seq_number] == NULL)
+    if(received_fragment->fragmented[fragment->seq_number] == NULL)
         printToSerial("AAAAAAH");
-    FragmentedPacket *fragments = received_fragment->packets[fragment->seq_number];
+    FragmentedPacket *fragments = received_fragment->fragmented[fragment->seq_number];
     fragments->packets.push_back(fragment);
     fragments->timestamp = system_timer_current_time();
     if(isLast(fragment))
@@ -309,14 +311,14 @@ void MacLayer::addToFragmented(MacBuffer *fragment){
     {
         if(fragments->packets.size() == fragments->packet_number)
         {
-            received_fragment->packets.erase(fragment->seq_number);
+            received_fragment->fragmented.erase(fragment->seq_number);
             std::sort(fragments->packets.begin(),fragments->packets.end(),compare_mac_buffers);
             addToDataReady(fragments);
-            if(received_fragment->packets.empty())
+            if(received_fragment->fragmented.empty())
             {
                 macbufferfragmentedreceived--;
                 delete received_fragment;
-                fragmented.erase(fragment->source);
+                receive_buffer.erase(fragment->source);
             }
             fragmentedpacket--;
             delete fragments;
@@ -337,12 +339,12 @@ void MacLayer::orderPackets(FragmentedPacket *fragmented){
 }
 
 bool MacLayer::checkRepetition(MacBuffer *received){
-    if(fragmented[received->source] != NULL)
+    if(receive_buffer[received->source] != NULL)
     {
-        MacBufferFragmentReceived *tmp = fragmented[received->source];
-        if(tmp->packets[received->seq_number] != NULL)
+        MacBufferFragmentReceived *tmp = receive_buffer[received->source];
+        if(tmp->fragmented[received->seq_number] != NULL)
         {
-            FragmentedPacket *fp = tmp->packets[received->seq_number];
+            FragmentedPacket *fp = tmp->fragmented[received->seq_number];
             if(std::find_if(fp->packets.begin(), fp->packets.end(), [received](MacBuffer * x){return received->seq_number == x->seq_number && received->frag == x->frag;}) != fp->packets.end())
                 return true;
         }
@@ -432,6 +434,7 @@ void MacLayer::systemTick(){
             ++it;
         else if(it->second->attempt < MAC_LAYER_RETRANSMISSION_ATTEMPT)
         {
+            it->second->queued = true;
             if(outBuffer.empty())
             {
                 outBuffer.insert(outBuffer.begin(), it->second);
@@ -462,21 +465,21 @@ void MacLayer::systemTick(){
     }
     
     map<uint32_t, MacBufferFragmentReceived *>::iterator it1;
-    for(it1 = fragmented.begin(); it1 != fragmented.end();)
+    for(it1 = receive_buffer.begin(); it1 != receive_buffer.end();)
     {
         MacBufferFragmentReceived *f = it1->second;
         if(f == NULL)
         {
-            fragmented.erase(it1++);
+            receive_buffer.erase(it1++);
             continue;
         }
         map<uint8_t, FragmentedPacket *>::iterator it2;
-        for(it2 = f->packets.begin(); it2 != f->packets.end();)
+        for(it2 = f->fragmented.begin(); it2 != f->fragmented.end();)
         {
             FragmentedPacket *fp = it2->second;
             if(fp == NULL)
             {
-                f->packets.erase(it2++);
+                f->fragmented.erase(it2++);
                 continue;
             }
             if(now - fp->timestamp < (MAC_LAYER_RETRANSMISSION_ATTEMPT + 1)*MAC_LAYER_RETRANSMISSION_TIME)
@@ -493,16 +496,17 @@ void MacLayer::systemTick(){
                         delete mb;
                     ++it3;                    
                 }
-                f->packets.erase(it2++);
+                f->fragmented.erase(it2++);
+                MicroBitEvent(MAC_LAYER, 15);
                 delete fp;
             }
         }
         
-        if(f->packets.empty())
+        if(f->fragmented.empty())
         {
             delete f;
             macbufferfragmentedreceived--;
-            fragmented.erase(it1++);
+            receive_buffer.erase(it1++);
         }
         else
         {
