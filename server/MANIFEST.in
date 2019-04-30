@@ -1,0 +1,6 @@
+include LICENSE
+include plants/schema.sql
+graft plants/static
+graft plants/templates
+graft tests
+global-exclude *.pyc

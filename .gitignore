@@ -8,3 +8,5 @@ server/venv
 server/instance
 server/tests
 server/plants.egg*
+server/plants/*pycache*
+server/.idea
