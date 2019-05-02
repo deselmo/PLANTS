@@ -13,10 +13,12 @@
 
 #define NETWORK_LAYER 421
 #define NETWORK_LAYER_PACKET_RECEIVED 23
-
+#define NETWORK_LAYER_COMMAND_RECEIVED 24
+#define NETWORK_LAYER_RT_BROKEN 25
 
 
 enum DDtype{
+    DD_NONE,
     DD_RT_INIT,
     DD_DATA,
     DD_COMMAND,
@@ -52,6 +54,10 @@ class NetworkLayer : public MicroBitComponent{
     uint32_t rely;
     bool rt_formed;
 
+    DDtype type_last_sent;
+
+    void send_to_mac(PacketBuffer p, uint32_t dest);
+
 
 public:
     NetworkLayer(MicroBit* uBit);
@@ -61,7 +67,12 @@ public:
     int send(PacketBuffer data);
     int send(ManagedString s);
 
-    void recv_from_mac(MicroBitEvent e); // evt handler for MAC_LAYER_PACKET_RECEIVED events
+    void send_ack(int count); // invia un ack relativo ad un RT_INIT con broadcast_count == count
+
+    void recv_from_mac(MicroBitEvent e); // evt handler for MAC_LAYER_PACKET_RECEIVED 
+    void packet_sent(MicroBitEvent e); // evt handler for MAC_LAYER_PACKET_SENT
+    void packet_timeout(MicroBitEvent e);
+
 
     PacketBuffer recv(); // interface provided to application layer
     
