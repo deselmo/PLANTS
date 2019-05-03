@@ -256,7 +256,7 @@ public:
     
     int getPacketsInQueue();
     void printToSerial(ManagedString s);
-    virtual void systemTick();
+    virtual void idleTick();
 };
 
 
