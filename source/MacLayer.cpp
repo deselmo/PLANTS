@@ -19,11 +19,11 @@ void MacLayer::init(){
 }
 
 
-PacketBuffer MacLayer::recv(){
+ManagedBuffer MacLayer::recv(){
     if(inBuffer.empty())
-        return PacketBuffer::EmptyPacket;
+        return ManagedBuffer::EmptyPacket;
     
-    PacketBuffer p = inBuffer.back();
+    ManagedBuffer p = inBuffer.back();
     inBuffer.pop_back();
     return p;
 }
@@ -300,7 +300,7 @@ bool compare_mac_buffers(const MacBuffer * first, const MacBuffer * second){
 }
 
 void MacLayer::addToDataReady(FragmentedPacket *buf){
-    PacketBuffer p(buf->length);
+    ManagedBuffer p(buf->length);
     uint8_t *bytes = p.getBytes();
     int len = 0;
     vector<MacBuffer *>::iterator it;

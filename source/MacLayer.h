@@ -2,6 +2,7 @@
 #define MAC_LAYER_H
 
 #include "MicroBit.h"
+#include "ManagedBuffer.h"
 #include <map>
 #include <vector>
 
@@ -104,7 +105,7 @@ class MacLayer : public MicroBitComponent{
 
 
     std::vector<MacBuffer *> outBuffer;                 // list of outgoing packets
-    std::vector<PacketBuffer> inBuffer;               // list of completely received messages
+    std::vector<ManagedBuffer> inBuffer;               // list of completely received messages
     MicroBit *uBit;                                     // Microbit
     uint8_t seq_number;                               // personal sequence number from 0-63
     std::map<uint32_t, MacBufferFragmentReceived *> receive_buffer; 
@@ -249,10 +250,10 @@ public:
     void init();
 
     int send(uint8_t *buffer, int len, uint32_t dest);
-    int send(PacketBuffer data, uint32_t dest);
+    int send(ManagedBuffer data, uint32_t dest);
     int send(ManagedString s, uint32_t dest);
     uint32_t getDisconnectedDestination();
-    PacketBuffer recv();
+    ManagedBuffer recv();
     
     int getPacketsInQueue();
     void printToSerial(ManagedString s);
