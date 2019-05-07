@@ -28,6 +28,11 @@ ManagedBuffer MacLayer::recv(){
     return p;
 }
 
+
+int MacLayer::send(ManagedBuffer data, uint32_t dest){
+    return send((uint8_t *)data.getBytes(), data.length(), dest);
+}
+
 /**
  * create 1 vector and destroy it
  * create n MacBuffer put in outBuffer
