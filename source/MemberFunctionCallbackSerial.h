@@ -1,8 +1,10 @@
 #ifndef MEMBER_FUNCTION_CALLBACK_SERIAL_H
 #define MEMBER_FUNCTION_CALLBACK_SERIAL_H
 
-
+#include "mbed.h"
 #include "ManagedBuffer.h"
+#include "PacketBuffer.h"
+#include "MicroBitCompat.h"
 
 class MemberFunctionCallbackSerial{
     private:

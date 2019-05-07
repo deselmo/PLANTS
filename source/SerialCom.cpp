@@ -1,70 +1,93 @@
 #include "SerialCom.h"
 
 SerialCom::SerialCom(MicroBit *uBit){
-    serial = &(uBit->serial);
+    this->uBit = uBit;
+}
+
+void execute_tasks(void *par){
+    SerialCom * serial = (SerialCom *) par;
+    while(true)
+    {
+        switch(serial->state)
+        {
+            case 0:
+                serial->id = serial->uBit->serial.read();
+                serial->state = 1;
+            case 1:
+                serial->value = serial->uBit->serial.read();
+                serial->state = 2;
+            case 2:
+                serial->read += serial->uBit->serial.read(((uint8_t *) &(serial->len)),sizeof(uint32_t));
+                if(serial->read == 4)
+                {
+                    serial->state = 3;
+                    serial->read = 0;
+                }
+                else
+                    break;
+            case 3:
+                if(serial->buf == NULL)
+                    serial->buf = new uint8_t [serial->len];
+                serial->read += serial->uBit->serial.read(serial->buf+serial->read,serial->len-serial->read);
+                if(serial->read == serial->len)
+                {
+                    ManagedBuffer b(serial->buf, serial->len);
+                    uint16_t hash = serial->id << 8;
+                    hash += serial->value;
+                    Listener *head = serial->listeners[hash];
+                    while(head != NULL)
+                    {
+                        head->cb->fire(b);
+                        head = head->next;
+                    }
+                    delete [] serial->buf;
+                    serial->buf = NULL;
+                    serial->state = 0;
+                    serial->read = 0;
+                }
+        }
+        //serial->uBit->sleep(100);
+    }
 }
 
 void SerialCom::init(){
-    fiber_add_idle_component(this);
+    uBit->messageBus.listen(SERIAL_ID, SERIAL_DATA_READY, this, &SerialCom::send_to_serial);
     state = 0;
     read = 0;
     buf = NULL;
+    sent = 0;
+    create_fiber(&execute_tasks, (void *) this);
 }
 
-template <typename T>
-void SerialCom::addListener(uint8_t id, uint8_t value, T* object, void (T::*handler)(ManagedBuffer)){
-    Listener * tmp = new Listener;
-    MemberFunctionCallbackSerial * cb = new MemberFunctionCallbackSerial(object, handler);
-    tmp->cb = cb;
-    uint16_t hash = id << 8;
-    hash += value;
-    if(listeners[hash] != NULL)
+
+
+void SerialCom::send(uint8_t *buf, uint32_t len){
+    ManagedBuffer b(buf,len);
+    send(b);
+}
+
+void SerialCom::send(ManagedBuffer buf){
+    if(out.empty())
     {
-        tmp->next = listeners[hash];
-        listeners[hash] = tmp;
+        out.push(buf);
+        MicroBitEvent evt(SERIAL_ID, SERIAL_DATA_READY);
     }
     else
-    {
-        tmp->next = NULL;
-        listeners[hash] = tmp;
-    } 
+        out.push(buf);   
 }
 
-void SerialCom::idleTick(){
-    switch(state){
-        case 0:
-            id = serial->read();
-            state = 1;
-        case 1:
-            value = serial->read();
-            state = 2;
-        case 2:
-            read += serial->read(((uint8_t *) &len),sizeof(uint32_t));
-            if(read == 4)
-            {
-                state = 3;
-                read = 0;
-            }
-            else
-                break;
-        case 3:
-            if(buf == NULL)
-                buf = new uint8_t [len];
-            read += serial->read(buf+read,len-read);
-            if(read == len)
-            {
-                ManagedBuffer b(buf, len);
-                uint16_t hash = id << 8;
-                hash += value;
-                Listener *head = listeners[hash];
-                while(head != NULL)
-                {
-                    head->cb->fire(b);
-                    head = head->next;
-                }
-                delete [] buf;
-                state = 0;
-                read = 0;
-            }
+void SerialCom::send_to_serial(MicroBitEvent e){
+    ManagedBuffer toSend(out.front());
+    sent += uBit->serial.send(toSend.getBytes()+sent, toSend.length() - sent);
+    if(sent == toSend.length())
+    {
+        out.pop();
+        sent = 0;
+        if(!out.empty())
+            MicroBitEvent evt(SERIAL_ID, SERIAL_DATA_READY);
+        
     }
+    else
+        MicroBitEvent evt(SERIAL_ID, SERIAL_DATA_READY);
+    
 }
