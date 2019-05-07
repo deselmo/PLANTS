@@ -3,3 +3,10 @@ yotta_targets
 yotta_modules
 .vscode
 Makefile
+
+server/venv
+server/instance
+server/tests
+server/plants.egg*
+server/plants/*pycache*
+server/.idea

@@ -142,6 +142,4 @@ int main()
         //f();
     }
     
-    
-    //release_fiber();
 }
