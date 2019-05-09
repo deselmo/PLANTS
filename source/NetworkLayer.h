@@ -7,6 +7,7 @@
 #include "MicroBit.h"
 #include "MacLayer.h"
 #include "ManagedBuffer.h"
+#include "SerialCom.h"
 
 #define NETWORK_LAYER 421
 
@@ -20,7 +21,7 @@ enum {
     NETWORK_LAYER_RT_BROKEN,
     NETWORK_LAYER_PACKET_READY_TO_SEND,
     NETWORK_LAYER_NODE_CONNECTED,
-    NETWORK_LAYER_SERIAL,
+    NETWORK_LAYER_SERIAL_ROUTING_TABLE,
 };
 
 
@@ -39,6 +40,12 @@ enum DDSend_state {
     DD_WAIT_TO_BROADCAST,
     DD_WAIT_TO_SINK,
     DD_WAIT_TO_SUBTREE,
+};
+
+
+enum DDSerialMode {
+    DD_SERIAL_GET,
+    DD_SERIAL_PUT,
 };
 
 
@@ -144,6 +151,7 @@ struct DDPayloadWithNodeRoute {
 
 class NetworkLayer : public MicroBitComponent {
     MicroBit *uBit;
+    SerialCom *serial;
     MacLayer mac_layer;
 
     std::queue<DDPacket> outBufferPackets;
@@ -155,20 +163,25 @@ class NetworkLayer : public MicroBitComponent {
     std::queue<std::tuple<bool, uint32_t, uint64_t>> inBufferNodes;
 
     const uint32_t network_id;
-    const bool sink_mode;
+    const bool     sink_mode;
     const uint32_t source;
 
 
     volatile uint64_t broadcast_counter;
-    volatile bool rt_formed = false;
-    volatile uint32_t rely = NULL;
+    volatile bool     rt_formed = false;
+    volatile uint32_t rely      = NULL;
 
     // time of the last DD_RT_INIT sent
-    volatile uint64_t time_last_operation;
+    volatile uint64_t time_last_operation = 0;
 
     // initial send_state Send instance variable
     volatile DDSend_state send_state = DD_READY_TO_SEND;
-    volatile uint32_t sending_to = NULL;
+    volatile uint32_t     sending_to = NULL;
+
+
+    // needed for the serial
+    volatile bool serial_waiting = false;
+    ManagedBuffer received_buffer = ManagedBuffer::EmptyPacket;
 
 
     private:
@@ -177,6 +190,8 @@ class NetworkLayer : public MicroBitComponent {
         void packet_sent(MicroBitEvent); // evt handler for MAC_LAYER_PACKET_SENT
         void packet_timeout(MicroBitEvent);
         void recv_from_mac(MicroBitEvent); // evt handler for MAC_LAYER_PACKET_RECEIVED events
+
+        void recv_from_serial(ManagedBuffer);
 
 
         // utility functions
@@ -193,6 +208,10 @@ class NetworkLayer : public MicroBitComponent {
 
         void get_store_broadcast_counter();
         void put_store_broadcast_counter();
+
+        // TODO REMOVE
+        bool get_route(uint32_t destination, DDNodeRoute&);
+        bool put_route(uint32_t destination, DDNodeRoute);
 
 
         // send functions
@@ -213,14 +232,22 @@ class NetworkLayer : public MicroBitComponent {
         void send_leave(ManagedBuffer payload, uint32_t origin);
 
 
-        // TODO REMOVE
-        bool get_route(uint32_t destination, DDNodeRoute&);
-        bool add_route(uint32_t destination, DDNodeRoute);
-
-
     public:
-        // create a new network layer in the specified sink_mode
-        NetworkLayer(MicroBit* uBit, uint16_t network_id, bool sink_mode);
+        // create a new network layer not in sink_mode
+        // uBit must be initialized with the init method
+        NetworkLayer(
+            MicroBit* uBit,
+            uint16_t network_id
+        );
+
+        
+        // create a new network layer in sink_mode
+        // uBit and serial must be initialized with the init method
+        NetworkLayer(
+            MicroBit* uBit,
+            uint16_t network_id,
+            SerialCom* serial
+        );
         
         void init();
 

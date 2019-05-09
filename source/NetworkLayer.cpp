@@ -397,21 +397,30 @@
 
 // NetworkLayer {
     NetworkLayer::NetworkLayer(
-        MicroBit* uBit,
-        uint16_t  network_id,
-        bool      sink_mode = false
+        MicroBit*  uBit,
+        uint16_t   network_id
     )
-        : network_id          (network_id)
-        , source              (microbit_serial_number())
-        , sink_mode           (sink_mode)
-        , uBit                (uBit)
+        : uBit                (uBit)
+        , serial              (NULL)
+        , network_id          (network_id)
+        , sink_mode           (false)
         , mac_layer           (MacLayer(uBit))
-        , time_last_operation (0)
-    {
-        if(this->sink_mode) {
-            this->get_store_broadcast_counter;
-        }
-    };
+        , source              (microbit_serial_number())
+    {};
+
+
+    NetworkLayer::NetworkLayer(
+        MicroBit*  uBit,
+        uint16_t   network_id,
+        SerialCom* serial
+    )
+        : uBit                (uBit)
+        , serial              (serial)
+        , network_id          (network_id)
+        , sink_mode           (true)
+        , mac_layer           (MacLayer(uBit))
+        , source              (microbit_serial_number())
+    {};
 
 
     void NetworkLayer::init() {
@@ -440,6 +449,16 @@
             MAC_LAYER_TIMEOUT,
             this, &NetworkLayer::packet_timeout
         );
+
+        if(this->sink_mode) {
+            this->get_store_broadcast_counter;
+            
+            this->serial->addListener(
+                NETWORK_LAYER,
+                NETWORK_LAYER_SERIAL_ROUTING_TABLE,
+                this, &NetworkLayer::recv_from_serial
+            );
+        }
 
         fiber_add_idle_component(this);
     }
@@ -563,7 +582,7 @@
                         return;
                     }
 
-                    this->add_route(dd_packet.origin, node_route);
+                    this->put_route(dd_packet.origin, node_route);
 
                     this->inBufferNodes.push(tuple<bool, uint32_t, uint64_t>(
                         true,
@@ -737,6 +756,15 @@
         }
     }
 
+    void NetworkLayer::recv_from_serial(ManagedBuffer received_buffer) {
+        if(!this->serial_waiting) {
+            return;
+        }
+
+        this->received_buffer = received_buffer;
+        this->serial_waiting = false;
+    }
+
 
     // utility functions
     bool NetworkLayer::elapsed_from_last_operation(uint64_t elapsed_time) {
@@ -796,6 +824,69 @@
             (uint8_t*) &this->broadcast_counter,
             sizeof(this->broadcast_counter)
         );
+    }
+
+    bool NetworkLayer::get_route(uint32_t destination, DDNodeRoute& node_route) {
+        this->serial_waiting = true;
+
+        uint8_t mode = DD_SERIAL_GET;
+        ManagedBuffer packet(sizeof(mode) + sizeof(destination));
+
+        uint64_t offset = 0;
+        memcpy(
+            packet.getBytes(),
+            &mode,
+            offset += sizeof(mode)
+        );
+        memcpy(
+            packet.getBytes() + offset,
+            &destination,
+            sizeof(destination)
+        );
+
+        this->serial->send(
+            NETWORK_LAYER,
+            NETWORK_LAYER_SERIAL_ROUTING_TABLE,
+            packet
+        );
+
+        while(this->serial_waiting) {
+            this->uBit->sleep(100);
+        }
+
+        DDNodeRoute node_route {
+            .size = this->received_buffer.length() / sizeof(uint32_t),
+            .addresses = this->received_buffer
+        };
+
+        return true;
+    }
+
+    bool NetworkLayer::put_route(uint32_t destination, DDNodeRoute node_route) {
+        this->serial_waiting = true;
+        this->serial->send(
+            NETWORK_LAYER,
+            NETWORK_LAYER_SERIAL_ROUTING_TABLE,
+            node_route.addresses
+        );
+
+        while(this->serial_waiting) {
+            this->uBit->sleep(100);
+        }
+
+        bool result;
+
+        if(this->received_buffer.length() != sizeof(result)) {
+            return false;
+        }
+
+        memcpy(
+            &result,
+            this->received_buffer.getBytes(),
+            sizeof(result)
+        );
+
+        return result;
     }
 
 
