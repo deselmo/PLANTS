@@ -1,5 +1,6 @@
 #include "NetworkLayer.h"
 
+
 // DDPacket {
     DDPacket DDPacket::Empty = DDPacket {
         .type       = (DDType) 0,
@@ -28,87 +29,87 @@
         };
     }
 
-    // extractor methods {
-        bool DDPacket::extractRT_INIT(uint64_t& broadcast_counter) {
-            if (this->type != DD_RT_INIT ||
-                this->payload.length() != sizeof(uint64_t)
-            ) {
-                return false;
-            }
 
-            memcpy(
-                &broadcast_counter,
-                this->payload.getBytes(),
-                sizeof(uint64_t)
-            );
-
-            return true;
+    // extractor methods
+    bool DDPacket::extractRT_INIT(uint64_t& broadcast_counter) {
+        if (this->type != DD_RT_INIT ||
+            this->payload.length() != sizeof(uint64_t)
+        ) {
+            return false;
         }
 
-        bool DDPacket::extractRT_ACK(DDNodeRoute& node_route, uint64_t& broadcast_counter) {
-            if (this->type != DD_RT_ACK) {
-                return false;
-            }
+        memcpy(
+            &broadcast_counter,
+            this->payload.getBytes(),
+            sizeof(uint64_t)
+        );
 
-            DDPayloadWithNodeRoute payload_with_node_route =
-                DDPayloadWithNodeRoute::fromManagedBuffer(this->payload);
+        return true;
+    }
 
-            if(payload_with_node_route.payload.length() != sizeof(uint64_t)) {
-                return false;
-            }
-
-            memcpy(
-                &broadcast_counter,
-                this->payload.getBytes(),
-                sizeof(uint64_t)
-            );
-
-            node_route = payload_with_node_route.node_route;
-
-            return !node_route.isEmpty();
+    bool DDPacket::extractRT_ACK(DDNodeRoute& node_route, uint64_t& broadcast_counter) {
+        if (this->type != DD_RT_ACK) {
+            return false;
         }
 
-        bool DDPacket::extractCOMMAND(DDNodeRoute& node_rotue, ManagedBuffer& payload) {
-            if (this->type != DD_COMMAND) {
-                return false;
-            }
+        DDPayloadWithNodeRoute payload_with_node_route =
+            DDPayloadWithNodeRoute::fromManagedBuffer(this->payload);
 
-            DDPayloadWithNodeRoute payload_with_node_route =
-                DDPayloadWithNodeRoute::fromManagedBuffer(this->payload);
-
-            if(payload_with_node_route.isEmpty()) {
-                return false;
-            }
-
-            node_rotue = payload_with_node_route.node_route;
-
-            payload = payload_with_node_route.payload;
-
-            return true;
+        if(payload_with_node_route.payload.length() != sizeof(uint64_t)) {
+            return false;
         }
-        
-        bool DDPacket::extractLEAVE(uint32_t& address, uint64_t& broadcast_number) {
-            if (this->type != DD_LEAVE ||
-                this->payload.length() != sizeof(uint32_t) + sizeof(uint64_t)
-            ) {
-                return false;
-            }
 
-            uint64_t offset = 0;
-            memcpy(
-                &address,
-                this->payload.getBytes(),
-                offset += sizeof(uint32_t)
-            );
-            memcpy(
-                &address,
-                this->payload.getBytes() + offset,
-                sizeof(uint32_t)
-            );
+        memcpy(
+            &broadcast_counter,
+            this->payload.getBytes(),
+            sizeof(uint64_t)
+        );
 
-            return true;
+        node_route = payload_with_node_route.node_route;
+
+        return !node_route.isEmpty();
+    }
+
+    bool DDPacket::extractCOMMAND(DDNodeRoute& node_rotue, ManagedBuffer& payload) {
+        if (this->type != DD_COMMAND) {
+            return false;
         }
-    // }
+
+        DDPayloadWithNodeRoute payload_with_node_route =
+            DDPayloadWithNodeRoute::fromManagedBuffer(this->payload);
+
+        if(payload_with_node_route.isEmpty()) {
+            return false;
+        }
+
+        node_rotue = payload_with_node_route.node_route;
+
+        payload = payload_with_node_route.payload;
+
+        return true;
+    }
+    
+    bool DDPacket::extractLEAVE(uint32_t& address, uint64_t& broadcast_number) {
+        if (this->type != DD_LEAVE ||
+            this->payload.length() != sizeof(uint32_t) + sizeof(uint64_t)
+        ) {
+            return false;
+        }
+
+        uint64_t offset = 0;
+        memcpy(
+            &address,
+            this->payload.getBytes(),
+            offset += sizeof(uint32_t)
+        );
+        memcpy(
+            &address,
+            this->payload.getBytes() + offset,
+            sizeof(uint32_t)
+        );
+
+        return true;
+    }
 
 
     bool DDPacket::operator==(const DDPacket& other) {
@@ -120,16 +121,13 @@
                this->length     == other.length     &&
                this->payload    == other.payload;
     }
-
     bool DDPacket::operator!=(const DDPacket& other) {
         return !(*this==other);
     }
 
-
     bool DDPacket::isEmpty() {
         return *this == DDPacket::Empty;
     }
-
 
     ManagedBuffer DDPacket::toManagedBuffer() {
         if(*this==DDPacket::Empty)
@@ -151,7 +149,6 @@
 
         return packet;
     }
-
     DDPacket DDPacket::fromManagedBuffer(ManagedBuffer packet) {
         if(packet.length() < sizeof(DDPacket))
             return DDPacket::Empty;
@@ -181,32 +178,32 @@
         .addresses = ManagedBuffer::EmptyPacket
     };
 
-    // factory functions {
-        DDNodeRoute DDNodeRoute::of(
-            uint32_t      address
-        ) {
-            return DDNodeRoute {
-                .size = 1,
-                .addresses = ManagedBuffer(
-                    (uint8_t*) &address,
-                    sizeof(address)
-                )
-            };
-        }
 
-        DDNodeRoute DDNodeRoute::of(
-                uint32_t*     address_array,
-                uint32_t      size
-        ) {
-            return DDNodeRoute {
-                .size = size,
-                .addresses = ManagedBuffer(
-                    (uint8_t*) address_array,
-                    size * sizeof(uint32_t)
-                )
-            };
-        }
-    // }
+    // factory functions
+    DDNodeRoute DDNodeRoute::of(
+        uint32_t      address
+    ) {
+        return DDNodeRoute {
+            .size = 1,
+            .addresses = ManagedBuffer(
+                (uint8_t*) &address,
+                sizeof(address)
+            )
+        };
+    }
+
+    DDNodeRoute DDNodeRoute::of(
+            uint32_t*     address_array,
+            uint32_t      size
+    ) {
+        return DDNodeRoute {
+            .size = size,
+            .addresses = ManagedBuffer(
+                (uint8_t*) address_array,
+                size * sizeof(uint32_t)
+            )
+        };
+    }
 
 
     void DDNodeRoute::push(uint32_t node_address) {
@@ -226,7 +223,6 @@
         );
         this->addresses = addresses;
     }
-
     uint32_t DDNodeRoute::take() {
         if(!(this->size > 0))
             return NULL;
@@ -241,7 +237,6 @@
 
         return node_address;
     }
-
     uint32_t* DDNodeRoute::get_address_array() {
         return (uint32_t*) this->addresses.getBytes();
     }
@@ -251,16 +246,13 @@
         return this->size      == other.size      &&
                this->addresses == other.addresses;
     }
-
     bool DDNodeRoute::operator!=(const DDNodeRoute& other) {
         return !(*this==other);
     }
 
-
     bool DDNodeRoute::isEmpty() {
         return *this == DDNodeRoute::Empty;
     }
-
 
     ManagedBuffer DDNodeRoute::toManagedBuffer() {
         if(*this == DDNodeRoute::Empty) {
@@ -288,7 +280,6 @@
 
         return packet;
     }
-
     DDNodeRoute DDNodeRoute::fromManagedBuffer(ManagedBuffer packet) {
         if(packet.length() < sizeof(DDNodeRoute))
             return DDNodeRoute::Empty;
@@ -337,16 +328,13 @@
                this->length     == other.length     &&
                this->payload    == other.payload;
     }
-
     bool DDPayloadWithNodeRoute::operator!=(const DDPayloadWithNodeRoute& other) {
         return !(*this==other);
     }
 
-
     bool DDPayloadWithNodeRoute::isEmpty() {
         return *this == DDPayloadWithNodeRoute::Empty;
     }
-
 
     ManagedBuffer DDPayloadWithNodeRoute::toManagedBuffer() {
         if(*this == DDPayloadWithNodeRoute::Empty)
@@ -379,7 +367,6 @@
 
         return packet;
     }
-
     DDPayloadWithNodeRoute DDPayloadWithNodeRoute::fromManagedBuffer(ManagedBuffer packet) {
         if(packet.length() < sizeof(DDPayloadWithNodeRoute))
             return DDPayloadWithNodeRoute::Empty;
@@ -408,122 +395,140 @@
 // }
 
 
-NetworkLayer::NetworkLayer(
-    MicroBit* uBit,
-    uint16_t  network_id,
-    bool      sink_mode = false
-)
-    : network_id          (network_id)
-    , source              (microbit_serial_number())
-    , sink_mode           (sink_mode)
-    , uBit                (uBit)
-    , mac_layer           (MacLayer(uBit))
-    , time_last_operation (0)
-{
-    if(this->sink_mode) {
-        this->get_store_broadcast_counter;
-    }
-};
+// NetworkLayer {
+    NetworkLayer::NetworkLayer(
+        MicroBit* uBit,
+        uint16_t  network_id,
+        bool      sink_mode = false
+    )
+        : network_id          (network_id)
+        , source              (microbit_serial_number())
+        , sink_mode           (sink_mode)
+        , uBit                (uBit)
+        , mac_layer           (MacLayer(uBit))
+        , time_last_operation (0)
+    {
+        if(this->sink_mode) {
+            this->get_store_broadcast_counter;
+        }
+    };
 
 
-void NetworkLayer::init() {
-    this->mac_layer.init();
+    void NetworkLayer::init() {
+        this->mac_layer.init();
 
-    this->uBit->messageBus.listen(
-        MAC_LAYER,
-        MAC_LAYER_PACKET_RECEIVED,
-        this, &NetworkLayer::recv_from_mac
-    );
+        this->uBit->messageBus.listen(
+            MAC_LAYER,
+            MAC_LAYER_PACKET_RECEIVED,
+            this, &NetworkLayer::recv_from_mac
+        );
 
-    this->uBit->messageBus.listen(
-        NETWORK_LAYER,
-        NETWORK_LAYER_PACKET_READY_TO_SEND,
-        this, &NetworkLayer::send_to_mac
-    );
+        this->uBit->messageBus.listen(
+            NETWORK_LAYER,
+            NETWORK_LAYER_PACKET_READY_TO_SEND,
+            this, &NetworkLayer::send_to_mac
+        );
 
-    this->uBit->messageBus.listen(
-        MAC_LAYER,
-        MAC_LAYER_PACKET_SENT,
-        this, &NetworkLayer::packet_sent
-    );
+        this->uBit->messageBus.listen(
+            MAC_LAYER,
+            MAC_LAYER_PACKET_SENT,
+            this, &NetworkLayer::packet_sent
+        );
 
-    this->uBit->messageBus.listen(
-        MAC_LAYER,
-        MAC_LAYER_TIMEOUT,
-        this, &NetworkLayer::packet_timeout
-    );
+        this->uBit->messageBus.listen(
+            MAC_LAYER,
+            MAC_LAYER_TIMEOUT,
+            this, &NetworkLayer::packet_timeout
+        );
 
-    fiber_add_idle_component(this);
-}
-
-
-void NetworkLayer::systemTick() {
-    if (this->sink_mode &&
-        this->elapsed_from_last_operation(NETWORK_LAYER_DD_RT_INIT_INTERVAL)
-    ) {
-        this->incr_broadcast_counter();
-        this->send_rt_init();
-    }
-    else if(!this->rt_formed &&
-            this->elapsed_from_last_operation(NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL)
-    ) {
-        this->send_join_request();
+        fiber_add_idle_component(this);
     }
 
-    if(this->send_state == DD_READY_TO_SEND && this->outBufferPackets.size()) {
-        switch(this->outBufferPackets.front().type) {
-            case DD_DATA:
-            case DD_RT_ACK:
-                this->send_state = DD_WAIT_TO_SINK;
-                break;
-            
-            case DD_COMMAND:
-                this->send_state = DD_WAIT_TO_SUBTREE;
-                break;
 
-            case DD_RT_INIT:
-            case DD_JOIN:
-                this->send_state = DD_WAIT_TO_BROADCAST;
-                break;
+    void NetworkLayer::systemTick() {
+        if (this->sink_mode &&
+            this->elapsed_from_last_operation(NETWORK_LAYER_DD_RT_INIT_INTERVAL)
+        ) {
+            this->incr_broadcast_counter();
+            this->send_rt_init();
+        }
+        else if(!this->rt_formed &&
+                this->elapsed_from_last_operation(NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL)
+        ) {
+            this->send_join_request();
         }
 
-        if(this->send_state != DD_READY_TO_SEND) {
-            MicroBitEvent(
-                NETWORK_LAYER,
-                NETWORK_LAYER_PACKET_READY_TO_SEND
-            );
+        if(this->send_state == DD_READY_TO_SEND && this->outBufferPackets.size()) {
+            switch(this->outBufferPackets.front().type) {
+                case DD_DATA:
+                case DD_RT_ACK:
+                    this->send_state = DD_WAIT_TO_SINK;
+                    break;
+                
+                case DD_COMMAND:
+                    this->send_state = DD_WAIT_TO_SUBTREE;
+                    break;
+
+                case DD_RT_INIT:
+                case DD_JOIN:
+                    this->send_state = DD_WAIT_TO_BROADCAST;
+                    break;
+            }
+
+            if(this->send_state != DD_READY_TO_SEND) {
+                MicroBitEvent(
+                    NETWORK_LAYER,
+                    NETWORK_LAYER_PACKET_READY_TO_SEND
+                );
+            }
         }
     }
-}
 
 
-/**
-  * Retreives packet payload data into NetworLayer::inBuffer.
-  *
-  * If a data packet is already available, then it will be returned immediately to the caller 
-  * (application layer) in the form of a ManagedBuffer.
-  *
-  * @return the data received, or an empty ManagedBuffer if no data is available.
-  */
-ManagedBuffer NetworkLayer::recv() {
-    if(inBufferPackets.empty())
-        return ManagedBuffer::EmptyPacket;
-    else {
-        ManagedBuffer p = inBufferPackets.front();
-        inBufferPackets.pop();
-        return p;
+    bool NetworkLayer::send(ManagedBuffer payload) {
+        this->send_data(payload);
+
+        return true;
     }
-}
 
-std::tuple<bool, uint32_t, uint64_t> NetworkLayer::recv_node() {
-    tuple<bool, uint32_t, uint64_t> connected_node = inBufferNodes.front();
-    inBufferNodes.pop();
+    bool NetworkLayer::send(ManagedBuffer payload, uint32_t destination) {
+        DDNodeRoute node_route;
 
-    return connected_node;
-}
+        if(!get_route(destination, node_route)) {
+            return false;
+        }
+
+        this->send_command(payload, node_route, destination);
+    }
 
 
-// event functions {
+    /**
+     * Retreives packet payload data into NetworLayer::inBuffer.
+     *
+     * If a data packet is already available, then it will be returned immediately to the caller 
+     * (application layer) in the form of a ManagedBuffer.
+     *
+     * @return the data received, or an empty ManagedBuffer if no data is available.
+     */
+    ManagedBuffer NetworkLayer::recv() {
+        if(inBufferPackets.empty())
+            return ManagedBuffer::EmptyPacket;
+        else {
+            ManagedBuffer p = inBufferPackets.front();
+            inBufferPackets.pop();
+            return p;
+        }
+    }
+
+    std::tuple<bool, uint32_t, uint64_t> NetworkLayer::recv_node() {
+        tuple<bool, uint32_t, uint64_t> connected_node = inBufferNodes.front();
+        inBufferNodes.pop();
+
+        return connected_node;
+    }
+
+
+    // event functions
     void NetworkLayer::recv_from_mac(MicroBitEvent) {
         ManagedBuffer received_mac_buffer = mac_layer.recv();
 
@@ -554,7 +559,7 @@ std::tuple<bool, uint32_t, uint64_t> NetworkLayer::recv_node() {
                     uint64_t broadcast_counter;
 
                     if(!dd_packet.extractRT_ACK(node_route, broadcast_counter) ||
-                       broadcast_counter != this->broadcast_counter) {
+                    broadcast_counter != this->broadcast_counter) {
                         return;
                     }
 
@@ -577,7 +582,7 @@ std::tuple<bool, uint32_t, uint64_t> NetworkLayer::recv_node() {
                     uint64_t broadcast_counter;
 
                     if(!dd_packet.extractLEAVE(disconnected_node_address, broadcast_counter) ||
-                       broadcast_counter != this->broadcast_counter) {
+                    broadcast_counter != this->broadcast_counter) {
                         return;
                     }
 
@@ -646,7 +651,7 @@ std::tuple<bool, uint32_t, uint64_t> NetworkLayer::recv_node() {
                     uint64_t broadcast_counter;
 
                     if(!dd_packet.extractRT_ACK(node_route, broadcast_counter) ||
-                       broadcast_counter != this->broadcast_counter) {
+                    broadcast_counter != this->broadcast_counter) {
                         return;
                     }
 
@@ -678,7 +683,6 @@ std::tuple<bool, uint32_t, uint64_t> NetworkLayer::recv_node() {
         }
     }
 
-
     void NetworkLayer::send_to_mac(MicroBitEvent) {
         DDPacket dd_packet = this->outBufferPackets.front();
         this->outBufferPackets.pop();
@@ -702,7 +706,6 @@ std::tuple<bool, uint32_t, uint64_t> NetworkLayer::recv_node() {
         this->mac_layer.send(packet.getBytes(), packet.length(), dd_packet.forward);
     }
 
-
     void NetworkLayer::packet_sent(MicroBitEvent) {
         switch(this->send_state) {
             case DD_WAIT_TO_SINK:
@@ -712,7 +715,6 @@ std::tuple<bool, uint32_t, uint64_t> NetworkLayer::recv_node() {
                 break;
         }
     }
-
 
     void NetworkLayer::packet_timeout(MicroBitEvent) {
         switch(this->send_state) {
@@ -734,10 +736,9 @@ std::tuple<bool, uint32_t, uint64_t> NetworkLayer::recv_node() {
                 break;
         }
     }
-// }
 
 
-// utility functions {
+    // utility functions
     bool NetworkLayer::elapsed_from_last_operation(uint64_t elapsed_time) {
         uint64_t current_time = system_timer_current_time();
         uint64_t elapsed_time = current_time - this->time_last_operation;
@@ -796,29 +797,12 @@ std::tuple<bool, uint32_t, uint64_t> NetworkLayer::recv_node() {
             sizeof(this->broadcast_counter)
         );
     }
-// }
 
-bool NetworkLayer::send(ManagedBuffer payload) {
-    this->send_data(payload);
 
-    return true;
-}
-
-bool NetworkLayer::send(ManagedBuffer payload, uint32_t destination) {
-    DDNodeRoute node_route;
-
-    if(!get_route(destination, node_route)) {
-        return false;
-    }
-
-    this->send_command(payload, node_route, destination);
-}
-
-// send functions {
+    // send functions
     void NetworkLayer::send_data(ManagedBuffer payload) {
         this->send_data(payload, this->source);
     }
-
     void NetworkLayer::send_data(ManagedBuffer payload, uint32_t origin) {
         this->outBufferPackets.push(
             DDPacket::of (
@@ -832,7 +816,6 @@ bool NetworkLayer::send(ManagedBuffer payload, uint32_t destination) {
             )
         );
     }
-
 
     void NetworkLayer::send_rt_init() {
         this->outBufferPackets.push(
@@ -850,11 +833,9 @@ bool NetworkLayer::send(ManagedBuffer payload, uint32_t destination) {
         );
     }
 
-
     void NetworkLayer::send_rt_ack() {
         this->send_rt_ack(DDNodeRoute::of(this->source), this->source);
     }
-
     void NetworkLayer::send_rt_ack(DDNodeRoute node_route, uint32_t origin) {
         uint64_t broadcast_counter = this->broadcast_counter;
 
@@ -877,7 +858,6 @@ bool NetworkLayer::send(ManagedBuffer payload, uint32_t destination) {
         );
     }
 
-
     void NetworkLayer::send_join_request() {
         this->outBufferPackets.push(
             DDPacket::of (
@@ -893,7 +873,6 @@ bool NetworkLayer::send(ManagedBuffer payload, uint32_t destination) {
             )
         );
     }
-
 
     void NetworkLayer::send_command(
         DDNodeRoute node_route,
@@ -915,7 +894,6 @@ bool NetworkLayer::send(ManagedBuffer payload, uint32_t destination) {
             )
         );
     }
-
     void NetworkLayer::send_command(
         ManagedBuffer payload,
         DDNodeRoute node_route,
@@ -948,7 +926,6 @@ bool NetworkLayer::send(ManagedBuffer payload, uint32_t destination) {
 
         this->send_leave(payload, this->source);
     }
-
     void NetworkLayer::send_leave(ManagedBuffer payload, uint32_t origin) {
         this->outBufferPackets.push(
             DDPacket::of (

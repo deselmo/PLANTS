@@ -10,10 +10,8 @@
 
 #define NETWORK_LAYER 421
 
-#define NETWORK_LAYER_DD_RT_INIT_INTERVAL 5000
-#define NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL 1000
-
-
+#define NETWORK_LAYER_DD_RT_INIT_INTERVAL      60000 // 1 minute
+#define NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL 1000  // 1 second
 
 enum {
     NETWORK_BROADCAST,
@@ -22,6 +20,17 @@ enum {
     NETWORK_LAYER_RT_BROKEN,
     NETWORK_LAYER_PACKET_READY_TO_SEND,
     NETWORK_LAYER_NODE_CONNECTED,
+    NETWORK_LAYER_SERIAL,
+};
+
+
+enum DDType {
+    DD_RT_INIT, // broadcast
+    DD_DATA,    // to rely,
+    DD_COMMAND, // to forward list
+    DD_RT_ACK,  // to rely with list of traversed nodes
+    DD_JOIN,    // (to rely) if (rt_formed) else (to broadcast)
+    DD_LEAVE,   // to rely, contain a node id and the broadcast counter
 };
 
 
@@ -30,15 +39,6 @@ enum DDSend_state {
     DD_WAIT_TO_BROADCAST,
     DD_WAIT_TO_SINK,
     DD_WAIT_TO_SUBTREE,
-};
-
-enum DDType {
-    DD_RT_INIT, // broadcast
-    DD_DATA,    // to rely,
-    DD_COMMAND, // to forward list
-    DD_RT_ACK,  // to rely with list of traversed nodes
-    DD_JOIN,    // (to rely) if (rt_formed) else (to broadcast)
-    DD_LEAVE,    // to rely, contain a node id
 };
 
 
@@ -51,30 +51,29 @@ struct DDPacketData {
 
 
 struct DDPacket {
-    // instance variables {
-        DDType   type;
-        uint32_t source;
-        uint16_t network_id;
-        uint32_t forward;
-        uint32_t origin;
-        uint32_t length;
-        ManagedBuffer  payload;
-    // }
+    DDType   type;
+    uint32_t source;
+    uint16_t network_id;
+    uint32_t forward;
+    uint32_t origin;
+    uint32_t length;
+    ManagedBuffer  payload;
+
 
     static DDPacket of(
         NetworkLayer*,
         DDPacketData
     );
 
-    // extractor methods {
-        bool extractRT_INIT(uint64_t& broadcast_counter);
 
-        bool extractRT_ACK(DDNodeRoute&, uint64_t& broadcast_counter);
+    bool extractRT_INIT(uint64_t& broadcast_counter);
 
-        bool extractCOMMAND(DDNodeRoute&, ManagedBuffer& payload);
+    bool extractRT_ACK(DDNodeRoute&, uint64_t& broadcast_counter);
 
-        bool extractLEAVE(uint32_t& address, uint64_t& broadcast_number);
-    // }
+    bool extractCOMMAND(DDNodeRoute&, ManagedBuffer& payload);
+
+    bool extractLEAVE(uint32_t& address, uint64_t& broadcast_number);
+
 
     bool operator==(const DDPacket&);
     bool operator!=(const DDPacket&);
@@ -88,22 +87,18 @@ struct DDPacket {
 
 
 struct DDNodeRoute {
-    // instance variables {
-        uint32_t      size;
-        ManagedBuffer addresses;
-    // }
+    uint32_t      size;
+    ManagedBuffer addresses;
 
 
-    // factory functions {
-        static DDNodeRoute of(
-            uint32_t address
-        );
+    static DDNodeRoute of(
+        uint32_t address
+    );
 
-        static DDNodeRoute of(
-            uint32_t* address_array,
-            uint32_t  size
-        );
-    // }
+    static DDNodeRoute of(
+        uint32_t* address_array,
+        uint32_t  size
+    );
 
 
     uint32_t* get_address_array();
@@ -127,18 +122,14 @@ struct DDNodeRoute {
 
 
 struct DDPayloadWithNodeRoute {
-    // instance variables {
-        DDNodeRoute   node_route;
-        uint32_t      length;
-        ManagedBuffer payload;
-    // }
+    DDNodeRoute   node_route;
+    uint32_t      length;
+    ManagedBuffer payload;
 
-    // factory functions {
-        static DDPayloadWithNodeRoute of(
-            DDNodeRoute   node_route,
-            ManagedBuffer payload
-        );
-    // }
+    static DDPayloadWithNodeRoute of(
+        DDNodeRoute   node_route,
+        ManagedBuffer payload
+    );
 
     bool operator==(const DDPayloadWithNodeRoute&);
     bool operator!=(const DDPayloadWithNodeRoute&);
@@ -152,86 +143,79 @@ struct DDPayloadWithNodeRoute {
 
 
 class NetworkLayer : public MicroBitComponent {
-    // istance variables {
-        MicroBit *uBit;
-        MacLayer mac_layer;
+    MicroBit *uBit;
+    MacLayer mac_layer;
 
-        std::queue<DDPacket> outBufferPackets;
+    std::queue<DDPacket> outBufferPackets;
 
-        // DD_DATA packets waiting to be processed by application level
-        std::queue<ManagedBuffer> inBufferPackets;
+    // DD_DATA packets waiting to be processed by application level
+    std::queue<ManagedBuffer> inBufferPackets;
 
-        // Queue of new node connected with the respective broadcast number
-        std::queue<std::tuple<bool, uint32_t, uint64_t>> inBufferNodes;
+    // Queue of new node connected with the respective broadcast number
+    std::queue<std::tuple<bool, uint32_t, uint64_t>> inBufferNodes;
 
-        const uint32_t network_id;
-        const bool sink_mode;
-        const uint32_t source;
+    const uint32_t network_id;
+    const bool sink_mode;
+    const uint32_t source;
 
 
-        volatile uint64_t broadcast_counter;
-        volatile bool rt_formed = false;
-        volatile uint32_t rely = NULL;
+    volatile uint64_t broadcast_counter;
+    volatile bool rt_formed = false;
+    volatile uint32_t rely = NULL;
 
-        // time of the last DD_RT_INIT sent
-        volatile uint64_t time_last_operation;
+    // time of the last DD_RT_INIT sent
+    volatile uint64_t time_last_operation;
 
-        // initial send_state Send instance variable
-        volatile DDSend_state send_state = DD_READY_TO_SEND;
-        volatile uint32_t sending_to = NULL;
-    // }
+    // initial send_state Send instance variable
+    volatile DDSend_state send_state = DD_READY_TO_SEND;
+    volatile uint32_t sending_to = NULL;
 
 
     private:
-        // event functions {
-            void send_to_mac(MicroBitEvent);
-            void packet_sent(MicroBitEvent); // evt handler for MAC_LAYER_PACKET_SENT
-            void packet_timeout(MicroBitEvent);
-
-            void recv_from_mac(MicroBitEvent); // evt handler for MAC_LAYER_PACKET_RECEIVED events
-        // }
+        // event functions
+        void send_to_mac(MicroBitEvent);
+        void packet_sent(MicroBitEvent); // evt handler for MAC_LAYER_PACKET_SENT
+        void packet_timeout(MicroBitEvent);
+        void recv_from_mac(MicroBitEvent); // evt handler for MAC_LAYER_PACKET_RECEIVED events
 
 
-        // utility functions {
-            bool elapsed_from_last_operation(uint64_t elapsed_time);
+        // utility functions
+        bool elapsed_from_last_operation(uint64_t elapsed_time);
 
-            // method called when the node lost the connection to its rely
-            void rt_disconnect();
+        // method called when the node lost the connection to its rely
+        void rt_disconnect();
 
-            // method called when the node lost the connection to its rely
-            void rt_connect(uint64_t broadcast_counter, uint32_t rely);
+        // method called when the node lost the connection to its rely
+        void rt_connect(uint64_t broadcast_counter, uint32_t rely);
 
-            
-            void incr_broadcast_counter();
+        
+        void incr_broadcast_counter();
 
-            void get_store_broadcast_counter();
-            void put_store_broadcast_counter();
-        // }
-
-
-        // send functions {
-            void send_data(ManagedBuffer payload);
-            void send_data(ManagedBuffer payload, uint32_t origin);
-            void send_rt_init();
-            void send_rt_ack();
-            void send_rt_ack(DDNodeRoute, uint32_t origin);
-            void send_join_request();
-            void send_command(
-                DDNodeRoute,
-                ManagedBuffer payload,
-                uint32_t destination,
-                uint32_t origin
-            );
-            void send_command(ManagedBuffer payload, DDNodeRoute, uint32_t destination);
-            void send_leave();
-            void send_leave(ManagedBuffer payload, uint32_t origin);
-        // }
+        void get_store_broadcast_counter();
+        void put_store_broadcast_counter();
 
 
-        // TODO REMOVE {
-            bool get_route(uint32_t destination, DDNodeRoute&);
-            bool add_route(uint32_t destination, DDNodeRoute);
-        // }
+        // send functions
+        void send_data(ManagedBuffer payload);
+        void send_data(ManagedBuffer payload, uint32_t origin);
+        void send_rt_init();
+        void send_rt_ack();
+        void send_rt_ack(DDNodeRoute, uint32_t origin);
+        void send_join_request();
+        void send_command(
+            DDNodeRoute,
+            ManagedBuffer payload,
+            uint32_t destination,
+            uint32_t origin
+        );
+        void send_command(ManagedBuffer payload, DDNodeRoute, uint32_t destination);
+        void send_leave();
+        void send_leave(ManagedBuffer payload, uint32_t origin);
+
+
+        // TODO REMOVE
+        bool get_route(uint32_t destination, DDNodeRoute&);
+        bool add_route(uint32_t destination, DDNodeRoute);
 
 
     public:
