@@ -710,25 +710,12 @@
         this->outBufferPackets.pop();
         this->sending_to = dd_packet.forward;
 
-        switch(this->send_state) {
-            case DD_READY_TO_SEND:
-                return;
-
-            case DD_WAIT_TO_BROADCAST:
-                this->send_state = DD_READY_TO_SEND;
-
-                break;
-
-            case DD_WAIT_TO_SINK:
-                break;
-
-            case DD_WAIT_TO_SUBTREE:
-                break;
-        }
-
         ManagedBuffer packet = dd_packet.toManagedBuffer();
-
         this->mac_layer.send(packet.getBytes(), packet.length(), dd_packet.forward);
+
+        if(this->send_state) {
+            this->send_state = DD_READY_TO_SEND;
+        }
     }
 
     void NetworkLayer::packet_sent(MicroBitEvent) {
