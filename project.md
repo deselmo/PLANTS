@@ -54,13 +54,25 @@ TIPI:
 ### Directed Diffusion unicast (livello rete)
 <TIPO, source, forward, origin, data>
 TIPI:
-- RtInit <RTInit, source, 0, origin, brcIndex>
-- DATA <DATA, source, forward, origin, data>
-- DataSink <DataSink, source, forward, origin, DATA=< forward_list(int n, int forward [n]), data > >
+
+- DD_RT_INIT <DD_RT_INIT, source, 0, origin, brcIndex>
+
+- DD_DATA <DATA, source, forward, origin, data>
+
+- DD_COMMAND <DD_COMMAND, source, forward, origin, DATA=< forward_list(int n, int forward [n]), data > >
   - creato solo dal sink per inviare messaggi unicast multi hop
-- Joined <Joined, source, forward, origin, DATA=route backward(int n, int backward [n])> 
+
+- DD_RT_ACK <Joined, source, forward, origin, DATA=route backward(int n, int backward [n])> 
   - usato dai sensori per comunicare il path verso di loro al sink.
-- arrivo di nuova pianta
-  - messaggio broadcast di join 
-  - il primo Microbit che risponde gli comunica di mandare i messaggi a lui
-  - al prossimo refresh dell'albero di rete ottiene la route migliore
+
+- DD_JOIN se non si conosce nessuno, altrimenti al rely
+  - arrivo di nuova pianta
+    - messaggio broadcast di join 
+    - il primo Microbit che risponde gli comunica di mandare i messaggi a lui
+    - al prossimo refresh dell'albero di rete ottiene la route migliore
+
+- DD_LEAVE: e' inviata da un nodo che fallisce l'invio di un DD_COMMAND
+            inoltrata tramite il rely verso il sink, per comunicarglielo
+  - contiene:
+    - l'indirizzo del nodo verso cui l'invio e' fallito
+    - broadcast_counter per escludere messaggi con broadcast_counter piu' vecchi
