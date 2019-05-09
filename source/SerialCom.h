@@ -44,6 +44,8 @@ public:
     friend void execute_tasks(void *);
     template <typename T>
     void addListener(uint8_t, uint8_t, T* object, void (T::*handle)(ManagedBuffer));
+    void send(uint8_t, uint8_t, uint8_t *, uint32_t);
+    void send(uint8_t, uint8_t, ManagedBuffer);
     void send(uint8_t *, uint32_t);
     void send(ManagedBuffer);
 };
