@@ -51,11 +51,11 @@ void f6(MicroBitEvent){
     //uBit.serial.send("Packet completely sent\n");
 }
 
-void f7(MicroBitEvent){
-    ManagedString p = m.recv();
-    uBit.serial.send(p+"\n",SYNC_SPINWAIT);
-    //m.recv();
-}
+// void f7(MicroBitEvent){
+//     ManagedString p = m.recv();
+//     uBit.serial.send(p+"\n",SYNC_SPINWAIT);
+//     //m.recv();
+// }
 
 
 void printMemoryAndStop() {
@@ -117,7 +117,7 @@ int main()
     //uBit.messageBus.listen(MAC_LAYER, 11, f5);
     uBit.messageBus.listen(MAC_LAYER, 15, f1);
     uBit.messageBus.listen(MAC_LAYER, MAC_LAYER_PACKET_SENT, f6);
-    uBit.messageBus.listen(MAC_LAYER, MAC_LAYER_PACKET_RECEIVED, f7);
+    // uBit.messageBus.listen(MAC_LAYER, MAC_LAYER_PACKET_RECEIVED, f7);
 
     if(uBit.radio.enable() != MICROBIT_OK)
         uBit.panic();
