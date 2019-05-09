@@ -9,7 +9,7 @@
 #include "ManagedBuffer.h"
 #include "SerialCom.h"
 
-#define NETWORK_LAYER 421
+#define NETWORK_LAYER 43
 
 #define NETWORK_LAYER_DD_RT_INIT_INTERVAL      60000 // 1 minute
 #define NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL 1000  // 1 second
@@ -46,6 +46,7 @@ enum DDSend_state {
 enum DDSerialMode {
     DD_SERIAL_GET,
     DD_SERIAL_PUT,
+    DD_SERIAL_CLEAR,
 };
 
 
@@ -55,6 +56,9 @@ struct DDPacketData {
     const uint32_t origin;
     ManagedBuffer  payload;
 };
+
+class NetworkLayer;
+struct DDNodeRoute;
 
 
 struct DDPacket {
@@ -169,14 +173,14 @@ class NetworkLayer : public MicroBitComponent {
 
     volatile uint64_t broadcast_counter;
     volatile bool     rt_formed = false;
-    volatile uint32_t rely      = NULL;
+    volatile uint32_t rely      = 0;
 
     // time of the last DD_RT_INIT sent
     volatile uint64_t time_last_operation = 0;
 
     // initial send_state Send instance variable
     volatile DDSend_state send_state = DD_READY_TO_SEND;
-    volatile uint32_t     sending_to = NULL;
+    volatile uint32_t     sending_to = 0;
 
 
     // needed for the serial
@@ -209,9 +213,10 @@ class NetworkLayer : public MicroBitComponent {
         void get_store_broadcast_counter();
         void put_store_broadcast_counter();
 
-        // TODO REMOVE
-        bool get_route(uint32_t destination, DDNodeRoute&);
-        bool put_route(uint32_t destination, DDNodeRoute);
+        // serial comunication
+        bool get_serial_node_route(uint32_t destination, DDNodeRoute&);
+        bool put_serial_node_route(DDNodeRoute);
+        bool clear_serial_node_routes();
 
 
         // send functions

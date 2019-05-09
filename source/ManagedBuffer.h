@@ -207,7 +207,7 @@ class ManagedBuffer
       * p1.length(); // Returns 16.
       * @endcode
       */
-    int length();
+    uint32_t length();
 
     static ManagedBuffer EmptyPacket;
 };

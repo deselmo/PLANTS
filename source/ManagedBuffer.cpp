@@ -261,7 +261,7 @@ uint8_t*ManagedBuffer::getBytes()
   * p1.length(); // Returns 16.
   * @endcode
   */
-int ManagedBuffer::length()
+uint32_t ManagedBuffer::length()
 {
     return ptr->length;
 }
