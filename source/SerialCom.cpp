@@ -62,7 +62,7 @@ void SerialCom::init(){
 
 
 void SerialCom::send(uint8_t id, uint8_t value, uint8_t *buf, uint32_t len){
-    ManagedBuffer b(len + sizeof(uin8_t)*2 + sizeof(uint32_t));
+    ManagedBuffer b(len + sizeof(uint8_t)*2 + sizeof(uint32_t));
     b[0] = id;
     b[1] = value;
     uint8_t * bytes = b.getBytes();
