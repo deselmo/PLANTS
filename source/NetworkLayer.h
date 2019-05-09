@@ -44,9 +44,9 @@ enum DDSend_state {
 
 
 enum DDSerialMode {
-    DD_SERIAL_GET,
-    DD_SERIAL_PUT,
-    DD_SERIAL_CLEAR,
+    DD_SERIAL_GET   = 0,
+    DD_SERIAL_PUT   = 1,
+    DD_SERIAL_CLEAR = 2,
 };
 
 
