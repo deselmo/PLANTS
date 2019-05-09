@@ -50,15 +50,19 @@ enum DDSerialMode {
 };
 
 
+struct DDPacketData;
+struct DDPacket;
+struct DDNodeRoute;
+struct DDPayloadWithNodeRoute;
+class  NetworkLayer;
+
+
 struct DDPacketData {
     const DDType   type;
     const uint32_t forward;
     const uint32_t origin;
     ManagedBuffer  payload;
 };
-
-class NetworkLayer;
-struct DDNodeRoute;
 
 
 struct DDPacket {
