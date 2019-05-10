@@ -735,27 +735,21 @@
     void NetworkLayer::packet_timeout(MicroBitEvent) {
         switch(this->send_state) {
             case DD_WAIT_TO_SINK:
-                this->send_state = DD_READY_TO_SEND;
-
                 this->rt_disconnect();
-
-                MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_RT_BROKEN); 
 
                 break;
 
             case DD_WAIT_TO_SUBTREE:
-
                 this->send_leave();
-
-                this->send_state = DD_READY_TO_SEND;
 
                 break;
 
-            
             case DD_READY_TO_SEND:
             case DD_WAIT_TO_BROADCAST:
                 return;
         }
+
+        this->send_state = DD_READY_TO_SEND;
     }
 
     void NetworkLayer::recv_from_serial(ManagedBuffer received_buffer) {
@@ -788,12 +782,16 @@
         std::queue<DDPacket> emptyOutBufferPackets;
 
         std::swap(this->outBufferPackets, emptyOutBufferPackets);
+
+        MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_RT_BROKEN);
     }
 
     void NetworkLayer::rt_connect(uint64_t broadcast_counter, uint32_t rely) {
         this->broadcast_counter = broadcast_counter;
         this->rely = rely;
         this->rt_formed = true;
+
+        MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_INIT);
     }
 
     void NetworkLayer::incr_broadcast_counter() {
