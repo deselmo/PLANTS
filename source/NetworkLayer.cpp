@@ -433,7 +433,7 @@
         );
 
         this->uBit->messageBus.listen(
-            NETWORK_LAYER,
+            NETWORK_LAYER_INTERNALS,
             NETWORK_LAYER_PACKET_READY_TO_SEND,
             this, &NetworkLayer::send_to_mac
         );
@@ -454,7 +454,7 @@
             this->get_store_broadcast_counter();
             
             this->serial->addListener(
-                NETWORK_LAYER,
+                NETWORK_LAYER_INTERNALS,
                 NETWORK_LAYER_SERIAL_ROUTING_TABLE,
                 this, &NetworkLayer::recv_from_serial
             );
@@ -497,7 +497,7 @@
 
             if(this->send_state != DD_READY_TO_SEND) {
                 MicroBitEvent(
-                    NETWORK_LAYER,
+                    NETWORK_LAYER_INTERNALS,
                     NETWORK_LAYER_PACKET_READY_TO_SEND
                 );
             }
@@ -846,7 +846,7 @@
         );
 
         this->serial->send(
-            NETWORK_LAYER,
+            NETWORK_LAYER_INTERNALS,
             NETWORK_LAYER_SERIAL_ROUTING_TABLE,
             packet
         );
@@ -886,7 +886,7 @@
         );
 
         this->serial->send(
-            NETWORK_LAYER,
+            NETWORK_LAYER_INTERNALS,
             NETWORK_LAYER_SERIAL_ROUTING_TABLE,
             packet
         );
@@ -916,7 +916,7 @@
         uint8_t mode = DD_SERIAL_CLEAR;
 
         this->serial->send(
-            NETWORK_LAYER,
+            NETWORK_LAYER_INTERNALS,
             NETWORK_LAYER_SERIAL_ROUTING_TABLE,
             ManagedBuffer(&mode, sizeof(mode))
         );
