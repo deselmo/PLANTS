@@ -9,7 +9,7 @@
         .forward    = 0,
         .origin     = 0,
         .length     = 0,
-        .payload    = ManagedBuffer::EmptyPacket
+        .payload    = ManagedBuffer(1)
     };
 
     DDPacket DDPacket::of(
@@ -173,7 +173,7 @@
 // DDNodeRoute {
     DDNodeRoute DDNodeRoute::Empty = DDNodeRoute {
         .size      = 0,
-        .addresses = ManagedBuffer::EmptyPacket
+        .addresses = ManagedBuffer(1)
     };
 
 
@@ -305,7 +305,7 @@
     DDPayloadWithNodeRoute DDPayloadWithNodeRoute::Empty = DDPayloadWithNodeRoute {
         .node_route = DDNodeRoute::Empty,
         .length     = 0,
-        .payload    = ManagedBuffer::EmptyPacket
+        .payload    = ManagedBuffer(1)
     };
 
 
