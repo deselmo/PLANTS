@@ -922,7 +922,7 @@
         );
 
         while(this->serial_waiting) {
-            this->uBit->sleep(100);
+            this->uBit->sleep(10);
         }
 
         bool result;
