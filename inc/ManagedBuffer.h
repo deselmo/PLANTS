@@ -2,6 +2,7 @@
 #define DD_MANAGED_BUFFER_H
 
 #include "RefCounted.h"
+#include "ManagedString.h"
 
 struct ManagedPacketData : RefCounted
 {
@@ -210,6 +211,11 @@ class ManagedBuffer
     uint32_t length();
 
     static ManagedBuffer EmptyPacket;
+
+
+    ManagedBuffer(const char* str);
+
+    ManagedBuffer(ManagedString);
 };
 
 #endif

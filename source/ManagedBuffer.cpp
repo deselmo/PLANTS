@@ -262,3 +262,13 @@ uint32_t ManagedBuffer::length()
 {
     return ptr->length;
 }
+
+ManagedBuffer::ManagedBuffer(const char* str) : ManagedBuffer(ManagedString(str)) {}
+
+ManagedBuffer::ManagedBuffer(ManagedString managed_string) {
+    this->init(NULL, managed_string.length());
+
+    for(uint16_t i = 0; i < managed_string.length(); i++) {
+      this->setByte(i, managed_string.charAt(i));
+    }
+}
