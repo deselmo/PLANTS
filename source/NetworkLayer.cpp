@@ -405,7 +405,6 @@
         , mac_layer           (MacLayer(uBit))
         , network_id          (network_id)
         , sink_mode           (false)
-        , source              (microbit_serial_number())
     {};
 
 
@@ -419,7 +418,6 @@
         , mac_layer           (MacLayer(uBit))
         , network_id          (network_id)
         , sink_mode           (true)
-        , source              (microbit_serial_number())
     {};
 
 
@@ -459,6 +457,9 @@
                 this, &NetworkLayer::recv_from_serial
             );
         }
+
+        this->source = microbit_serial_number();
+        this->received_buffer = ManagedBuffer::EmptyPacket;
 
         fiber_add_idle_component(this);
     }

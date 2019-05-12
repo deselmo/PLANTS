@@ -178,7 +178,7 @@ class NetworkLayer : public MicroBitComponent {
 
     const uint32_t network_id;
     const bool     sink_mode;
-    const uint32_t source;
+    uint32_t source;
 
 
     volatile uint64_t broadcast_counter;
@@ -195,7 +195,7 @@ class NetworkLayer : public MicroBitComponent {
 
     // needed for the serial
     volatile bool serial_waiting = false;
-    ManagedBuffer received_buffer = ManagedBuffer::EmptyPacket;
+    ManagedBuffer received_buffer;
 
 
     private:
