@@ -51,7 +51,7 @@ void execute_tasks(void *par){
 }
 
 void SerialCom::init(){
-    uBit->serial.baud(19200);
+    uBit->serial.baud(9600);
     uBit->messageBus.listen(SERIAL_ID, SERIAL_DATA_READY, this, &SerialCom::send_to_serial);
     state = 0;
     read = 0;
