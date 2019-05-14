@@ -8,8 +8,8 @@
 
 MicroBit uBit;
 SerialCom serial(&uBit);
-//NetworkLayer nl(&uBit, NETWORK_ID, &serial);
-MacLayer ml(&uBit, NULL);
+NetworkLayer nl(&uBit, NETWORK_ID, &serial, true);
+//MacLayer ml(&uBit, NULL);
 
 void send(const char* str) {
     serial.send(MAIN, DEBUG, str);
@@ -18,9 +18,10 @@ void send(const char* str) {
 int main() {
     uBit.init();
     serial.init();
+    //ml.init();
 
     uBit.display.print('w');
-    //nl.init();
+    nl.init();
     uBit.display.print('S');
 
     uint64_t body = 1;
@@ -29,7 +30,7 @@ int main() {
     ManagedBuffer payload((uint8_t*)&body, sizeof(body));
 
     while(true) {
-        ml.send(payload, 0);
+        //ml.send(payload, 0);
         if(uBit.buttonA.isPressed()) {
             uBit.display.print("a");
             send("a");
