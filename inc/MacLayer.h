@@ -30,7 +30,7 @@
 #define MAC_LAYER_PROTOCOL 5                // the protocol that is used when sending a packet through the radio
 
 
-#define MAC_LAYER 420                       // mac layer busEvent id
+#define MAC_LAYER 120                       // mac layer busEvent id
 
 /**
   * Mac Layer packet

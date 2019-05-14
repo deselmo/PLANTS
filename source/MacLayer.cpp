@@ -51,13 +51,15 @@ int MacLayer::send(uint8_t *buffer, int len, uint32_t dest){
     if(len > MAC_LAYER_PAYLOAD_LENGTH)
     {
         ManagedBuffer b("fragmenting");
-        serial->send(MAC_LAYER, 1, b);
+        if(serial != NULL)
+            serial->send(MAC_LAYER, 1, b);
         toSend = prepareFragment(buffer, len, dest);
     }
     else
     {
         ManagedBuffer b("not fragmenting");
-        serial->send(MAC_LAYER, 1, b);
+        if(serial != NULL)
+            serial->send(MAC_LAYER, 1, b);
         toSend = new vector<MacBuffer *>;
         MacBuffer *tmp = createMacBuffer(0,dest,len,buffer, 0, true);
         toSend->insert(toSend->begin(),tmp);
@@ -173,7 +175,8 @@ void MacLayer::send_to_radio(MicroBitEvent){
         if(toSend->type == 0 && toSend->destination != 0)
         {
             ManagedBuffer b("sent message not brodcast");
-            serial->send(MAC_LAYER,1,b)
+            if(serial != NULL)
+                serial->send(MAC_LAYER,1,b)
             toSend->timestamp = system_timer_current_time();
             uint16_t hash = getHash(toSend);
             if(waiting[hash] == toSend)
@@ -186,7 +189,8 @@ void MacLayer::send_to_radio(MicroBitEvent){
         else if(toSend->type == 1)
         {
             ManagedBuffer b("sent ack");
-            serial->send(MAC_LAYER,1,b);
+            if(serial != NULL)
+                serial->send(MAC_LAYER,1,b);
             macbufferallocated--;
             delete toSend;
         }
@@ -194,7 +198,8 @@ void MacLayer::send_to_radio(MicroBitEvent){
         else
         {
             ManagedBuffer b("sent Brodcast");
-            serial->send(MAC_LAYER,1,b);
+            if(serial != NULL)
+                serial->send(MAC_LAYER,1,b);
             macbufferallocated--;
             delete toSend;
         }
