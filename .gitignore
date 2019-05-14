@@ -1,8 +1,8 @@
 build
 yotta_targets
 yotta_modules
-.vscode
 Makefile
+ipch
 
 server/venv
 server/instance
