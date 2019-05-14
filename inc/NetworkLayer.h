@@ -199,6 +199,7 @@ class NetworkLayer : public MicroBitComponent {
     volatile bool serial_initiated = false;
     volatile bool serial_waiting = false;
     ManagedBuffer serial_received_buffer;
+    ManagedBuffer serial_in_sending_buffer;
 
 
     private:
@@ -232,6 +233,7 @@ class NetworkLayer : public MicroBitComponent {
         bool serial_get_node_route(uint32_t destination, DDNodeRoute&);
         bool serial_put_node_route(DDNodeRoute);
         bool serial_clear_node_routes();
+        void serial_send(ManagedBuffer payload);
 
 
         // send functions

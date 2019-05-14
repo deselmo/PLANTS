@@ -462,6 +462,7 @@
 
         this->source = microbit_serial_number();
         this->serial_received_buffer = ManagedBuffer::EmptyPacket;
+        this->serial_in_sending_buffer = ManagedBuffer::EmptyPacket;
 
         fiber_add_idle_component(this);
     }
@@ -758,12 +759,31 @@
     }
 
     void NetworkLayer::recv_from_serial(ManagedBuffer serial_received_buffer) {
-        if(!this->serial_waiting) {
-            return;
-       }
+        uint8_t code = serial_received_buffer.getByte(0);
 
-        this->serial_received_buffer = serial_received_buffer;
-        this->serial_waiting = false;
+        if(code == DD_SERIAL_INIT) {
+            uint8_t mode = DD_SERIAL_INIT_ACK;
+
+            this->serial->send(
+                NETWORK_LAYER_INTERNALS,
+                NETWORK_LAYER_SERIAL_ROUTING_TABLE,
+                ManagedBuffer(&mode, sizeof(mode))
+            );
+            if(this->serial_waiting) {
+                this->serial->send(
+                    NETWORK_LAYER_INTERNALS,
+                    NETWORK_LAYER_SERIAL_ROUTING_TABLE,
+                    this->serial_in_sending_buffer
+                );
+            }
+
+            this->serial_initiated = true;
+        }
+        
+        else if(this->serial_waiting) {
+            this->serial_received_buffer = serial_received_buffer;
+            this->serial_waiting = false;
+        }
     }
 
 
@@ -833,35 +853,27 @@
 
     void NetworkLayer::serial_wait_init() {
         while(!this->serial_initiated) {
-            this->serial_waiting = true;
-
-            while(this->serial_waiting) {
-                this->uBit->sleep(100);
-            }
-
-            ManagedBuffer packet = this->serial_received_buffer;
-
-            uint8_t code = this->serial_received_buffer.getByte(0);
-
-            if(code == DD_SERIAL_INIT) {
-                uint8_t mode = DD_SERIAL_INIT_ACK;
-
-                this->serial->send(
-                    NETWORK_LAYER_INTERNALS,
-                    NETWORK_LAYER_SERIAL_ROUTING_TABLE,
-                    ManagedBuffer(&mode, sizeof(mode))
-                );
-
-                this->serial_initiated = true;
-            }
-            
             this->uBit->sleep(100);
         }
     }
 
-    bool NetworkLayer::serial_get_node_route(uint32_t destination, DDNodeRoute& node_route) {
+    void NetworkLayer::serial_send(ManagedBuffer packet) {
+        this->serial_in_sending_buffer = packet;
+
         this->serial_waiting = true;
 
+        this->serial->send(
+            NETWORK_LAYER_INTERNALS,
+            NETWORK_LAYER_SERIAL_ROUTING_TABLE,
+            packet
+        );
+
+        while(this->serial_waiting) {
+            this->uBit->sleep(10);
+        }
+    }
+
+    bool NetworkLayer::serial_get_node_route(uint32_t destination, DDNodeRoute& node_route) {
         uint8_t mode = DD_SERIAL_GET;
         ManagedBuffer packet(sizeof(mode) + sizeof(destination));
 
@@ -877,15 +889,7 @@
             sizeof(destination)
         );
 
-        this->serial->send(
-            NETWORK_LAYER_INTERNALS,
-            NETWORK_LAYER_SERIAL_ROUTING_TABLE,
-            packet
-        );
-
-        while(this->serial_waiting) {
-            this->uBit->sleep(10);
-        }
+        this->serial_send(packet);
 
         if(this->serial_received_buffer == ManagedBuffer::EmptyPacket) {
             return false;
@@ -900,8 +904,6 @@
     }
 
     bool NetworkLayer::serial_put_node_route(DDNodeRoute node_route) {
-        this->serial_waiting = true;
-
         uint8_t mode = DD_SERIAL_PUT;
         ManagedBuffer packet(sizeof(mode) + node_route.addresses.length());
 
@@ -917,15 +919,7 @@
             node_route.addresses.length()
         );
 
-        this->serial->send(
-            NETWORK_LAYER_INTERNALS,
-            NETWORK_LAYER_SERIAL_ROUTING_TABLE,
-            packet
-        );
-
-        while(this->serial_waiting) {
-            this->uBit->sleep(10);
-        }
+        this->serial_send(packet);
 
         bool result;
 
@@ -943,16 +937,14 @@
     }
 
     bool NetworkLayer::serial_clear_node_routes() {
-        this->serial_waiting = true;
-
         uint8_t mode = DD_SERIAL_CLEAR;
 
+        this->serial_waiting = true;
         this->serial->send(
             NETWORK_LAYER_INTERNALS,
             NETWORK_LAYER_SERIAL_ROUTING_TABLE,
             ManagedBuffer(&mode, sizeof(mode))
         );
-
         while(this->serial_waiting) {
             this->uBit->sleep(10);
         }
