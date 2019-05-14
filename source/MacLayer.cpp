@@ -4,6 +4,12 @@
 #include <algorithm>
 
 
+ManagedMacBuffer ManagedMacBuffer::of(MacBuffer& buf){
+    ManagedMacBuffer b;
+    b.b = ManagedBuffer((uint8_t *)&buf, sizeof(MacBuffer));
+    return b;
+}
+
 MacLayer::MacLayer(MicroBit* uBit, SerialCom* serial){
     seq_number = 248;
     this->uBit = uBit;
@@ -41,7 +47,7 @@ int MacLayer::send(uint8_t *buffer, int len, uint32_t dest){
     
     // create two MacBuffer pointer one to the first and one to 
     // the last MacBuffer (used in case of fragmentation)
-    vector<MacBuffer *> *toSend;
+    vector<ManagedMacBuffer> toSend;
     if(len > MAC_LAYER_MAX_POSSIBLE_PAYLOAD_LENGTH)
     {
         return MAC_LAYER_PACKET_TOO_LARGE;
@@ -60,44 +66,42 @@ int MacLayer::send(uint8_t *buffer, int len, uint32_t dest){
         ManagedBuffer b("not fragmenting");
         if(serial != NULL)
             serial->send(MAC_LAYER, 1, b);
-        toSend = new vector<MacBuffer *>;
-        MacBuffer *tmp = createMacBuffer(0,dest,len,buffer, 0, true);
-        toSend->insert(toSend->begin(),tmp);
+        ManagedMacBuffer tmp = createMacBuffer(0,dest,len,buffer, 0, true);
+        toSend.insert(toSend.begin(),tmp);
     }
     macbuffersent++;
-    MacBufferSent *sent = new MacBufferSent;
-    sent->seq_number = seq_number-1;
-    sent->total = toSend->size();
-    sent->received = 0;
-    waiting_for_ack[seq_number-1] = sent;
+    MacBufferSent sent;
+    sent.seq_number = seq_number-1;
+    sent.total = toSend.size();
+    sent.received = 0;
+    ManagedMacBufferSent s = ManagedMacBufferSent::of(sent);
+    waiting_for_ack[seq_number-1] = s;
     
 
 
     //outBuffer is empty
     if(outBuffer.empty())
     {
-        outBuffer.insert(outBuffer.begin(), toSend->begin(), toSend->end());
+        outBuffer.insert(outBuffer.begin(), toSend.begin(), toSend.end());
         MicroBitEvent evt(MAC_LAYER, MAC_LAYER_PACKET_READY_TO_SEND);
     }
     else
-        outBuffer.insert(outBuffer.begin(), toSend->begin(), toSend->end());
-    delete toSend;
+        outBuffer.insert(outBuffer.begin(), toSend.begin(), toSend.end());
     return MAC_LAYER_OK;
 }
 
 /**
  * creates 1 MacBuffer
  */
-MacBuffer *MacLayer::createMacBuffer(uint8_t type, uint32_t dest, int len, uint8_t *buffer, uint8_t frag, bool inc){
-    macbufferallocated++;
-    MacBuffer *buf = new MacBuffer;
-    buf->attempt = 0;
-    buf->type = type;
-    buf->destination = dest;
-    buf->source = microbit_serial_number();
-    buf->frag = frag;
-    buf->seq_number = seq_number;
-    buf->control = setControl(len,inc);
+ManagedMacBuffer MacLayer::createMacBuffer(uint8_t type, uint32_t dest, int len, uint8_t *buffer, uint8_t frag, bool inc){
+    MacBuffer buf;
+    buf.attempt = 0;
+    buf.type = type;
+    buf.destination = dest;
+    buf.source = microbit_serial_number();
+    buf.frag = frag;
+    buf.seq_number = seq_number;
+    buf.control = setControl(len,inc);
     if(inc)
     {
         if(seq_number == 255)
@@ -105,9 +109,9 @@ MacBuffer *MacLayer::createMacBuffer(uint8_t type, uint32_t dest, int len, uint8
         else
             seq_number++;
     }
-    buf->queued = true;
-    memcpy(&(buf->payload), buffer, len);
-    return buf;
+    buf.queued = true;
+    memcpy(&(buf.payload), buffer, len);
+    return ManagedMacBuffer::of(buf);
 }
 
 uint8_t MacLayer::setControl(int len, bool inc){
@@ -128,19 +132,19 @@ int MacLayer::getPacketsInQueue(){
  * create 1 vector
  * create n MacBuffer
  */
-vector<MacBuffer *> * MacLayer::prepareFragment(uint8_t *buffer, int len, uint32_t dest){
-    vector<MacBuffer *> *ret = new vector<MacBuffer *>;
+vector<ManagedMacBuffer> MacLayer::prepareFragment(uint8_t *buffer, int len, uint32_t dest){
+    vector<ManagedMacBuffer> ret;
     int j = 1;
     int i;
     //necessary to be always sure to have more data to send after the for cycle
     for(i = 0; i < len - MAC_LAYER_PAYLOAD_LENGTH; i+=MAC_LAYER_PAYLOAD_LENGTH)
     {
-        MacBuffer *tmp = createMacBuffer(0, dest, MAC_LAYER_PAYLOAD_LENGTH, buffer+i, j, false);
-        ret->insert(ret->begin(),tmp);
+        ManagedMacBuffer tmp = createMacBuffer(0, dest, MAC_LAYER_PAYLOAD_LENGTH, buffer+i, j, false);
+        ret.insert(ret.begin(),tmp);
         j++;
     }
-    MacBuffer *tmp = createMacBuffer(0, dest, len - i, buffer + i, j, true);
-    ret->insert(ret->begin(),tmp);
+    ManagedMacBuffer tmp = createMacBuffer(0, dest, len - i, buffer + i, j, true);
+    ret.insert(ret.begin(),tmp);
     return ret;
 }
 
@@ -148,22 +152,29 @@ vector<MacBuffer *> * MacLayer::prepareFragment(uint8_t *buffer, int len, uint32
  * deletes 1 MacBuffer if is ACK otherwise put 1 MacBuffer into waiting
  */
 void MacLayer::send_to_radio(MicroBitEvent){
-    MacBuffer * toSend = outBuffer.back();
+    ManagedMacBuffer toSend = outBuffer.back();
     PacketBuffer p(MICROBIT_RADIO_MAX_PACKET_SIZE);
     uint8_t *payload = p.getBytes();
     int tmp = sizeof(uint8_t);
-    payload[0] = toSend->type;
-    memcpy(payload+tmp,&(toSend->destination), sizeof(uint32_t));
+    payload[0] = toSend.type();
+    uint32_t destination = toSend.destination();
+    uint32_t source = toSend.source();
+    uint8_t frag = toSend.frag();
+    uint8_t seq_number = toSend.seq_number();
+    uint8_t control = toSend.control();
+    Payload macbuffer = toSend.payload();
+    memcpy(payload+tmp,&(destination), sizeof(uint32_t));
     tmp += sizeof(uint32_t);
-    memcpy(payload+tmp,&(toSend->source),sizeof(uint32_t));
+    memcpy(payload+tmp,&(source),sizeof(uint32_t));
     tmp += sizeof(uint32_t);
-    memcpy(payload+tmp,&(toSend->frag),sizeof(uint8_t));
+    memcpy(payload+tmp,&(frag),sizeof(uint8_t));
     tmp += sizeof(uint8_t);
-    memcpy(payload+tmp,&(toSend->seq_number),sizeof(uint8_t));
+
+    memcpy(payload+tmp,&(seq_number),sizeof(uint8_t));
     tmp += sizeof(uint8_t);
-    memcpy(payload+tmp,&(toSend->control),sizeof(uint8_t));
+    memcpy(payload+tmp,&(control),sizeof(uint8_t));
     tmp += sizeof(uint8_t);
-    memcpy(payload+tmp,&(toSend->payload),MAC_LAYER_PAYLOAD_LENGTH);
+    memcpy(payload+tmp,(macbuffer.payload),MAC_LAYER_PAYLOAD_LENGTH);
     
     int res = uBit->radio.datagram.send(p);
     if(res == MICROBIT_OK)
@@ -172,27 +183,26 @@ void MacLayer::send_to_radio(MicroBitEvent){
         outBuffer.pop_back();
         // the message sent was a data packet and a unicast message then handle the
         // retransmission of the packet
-        if(toSend->type == 0 && toSend->destination != 0)
+        if(toSend.type() == 0 && toSend.destination() != 0)
         {
             ManagedBuffer b("sent message not brodcast");
             if(serial != NULL)
-                serial->send(MAC_LAYER,1,b)
-            toSend->timestamp = system_timer_current_time();
+                serial->send(MAC_LAYER,1,b);
+            toSend.timestamp(system_timer_current_time());
             uint16_t hash = getHash(toSend);
             if(waiting[hash] == toSend)
-                toSend->attempt++;
+                toSend.attempt(toSend.attempt() + 1);
             else
                 waiting[hash] = toSend; 
-            toSend->queued = false;  
+            toSend.queued(false);  
         }
         // the message sent was an ack packet so nothing more to do   
-        else if(toSend->type == 1)
+        else if(toSend.type() == 1)
         {
             ManagedBuffer b("sent ack");
             if(serial != NULL)
                 serial->send(MAC_LAYER,1,b);
             macbufferallocated--;
-            delete toSend;
         }
         // the message sent was a brodcast packet
         else
@@ -201,7 +211,6 @@ void MacLayer::send_to_radio(MicroBitEvent){
             if(serial != NULL)
                 serial->send(MAC_LAYER,1,b);
             macbufferallocated--;
-            delete toSend;
         }
         
         if(!outBuffer.empty())
@@ -232,63 +241,46 @@ void MacLayer::recv_from_radio(MicroBitEvent){
     PacketBuffer packet = uBit->radio.datagram.recv();
     uint8_t *payload = packet.getBytes();
     macbufferallocated++;
-    MacBuffer * received = new MacBuffer;
+    MacBuffer received;
     int tmp = sizeof(uint8_t);
-    memcpy(&(received->type), payload, sizeof(uint8_t));
-    memcpy(&(received->destination), payload+tmp, sizeof(uint32_t));
+    memcpy(&(received.type), payload, sizeof(uint8_t));
+    memcpy(&(received.destination), payload+tmp, sizeof(uint32_t));
     tmp += sizeof(uint32_t);
-    memcpy(&(received->source),payload+tmp, sizeof(uint32_t));
+    memcpy(&(received.source),payload+tmp, sizeof(uint32_t));
     tmp += sizeof(uint32_t);
-    memcpy(&(received->frag), payload+tmp, sizeof(uint8_t));
+    memcpy(&(received.frag), payload+tmp, sizeof(uint8_t));
     tmp += sizeof(uint8_t);
-    memcpy(&(received->seq_number),payload+tmp, sizeof(uint8_t));
+    memcpy(&(received.seq_number),payload+tmp, sizeof(uint8_t));
     tmp += sizeof(uint8_t);
-    memcpy(&(received->control), payload+tmp, sizeof(uint8_t));
+    memcpy(&(received.control), payload+tmp, sizeof(uint8_t));
     tmp += sizeof(uint8_t);
-    memcpy(&(received->payload), payload+tmp, sizeof(uint8_t)*MAC_LAYER_PAYLOAD_LENGTH);
+    memcpy(&(received.payload), payload+tmp, sizeof(uint8_t)*MAC_LAYER_PAYLOAD_LENGTH);
 
+    ManagedMacBuffer recv = ManagedMacBuffer::of(received);
 
     //received a unicast packet
-    if(received->destination == microbit_serial_number())
+    if(recv.destination() == microbit_serial_number())
     {
-        if(received->type == 0)
+        if(recv.type() == 0)
         {
             
-            sendAck(received);
+            sendAck(recv);
             
             // if already received just ignore the packet after having sent
             // the ack back
-            if(checkRepetition(received))
-            {
-                macbufferallocated--;
-                delete received;
-            }
-            else
-            {
-                addToFragmented(received);
-            }
+            if(!checkRepetition(recv))
+                addToFragmented(recv);
             
         } 
-        else if(received->type == 1)
-        {
-            accomplishAck(received);
-            delete received;
-            macbufferallocated--;
-        }
+        else if(recv.type() == 1)
+            accomplishAck(recv);
            
     }
     // received brodcast message just don't send ack
-    else if (received->destination == 0)
+    else if (recv.destination() == 0)
     {
-        if(checkRepetition(received))
-        {
-            macbufferallocated--;
-            delete received;
-        }
-        else
-        {
-            addToFragmented(received);
-        }
+        if(!checkRepetition(recv))
+            addToFragmented(recv);
         
     }
     // received message not for us discard it
@@ -296,7 +288,6 @@ void MacLayer::recv_from_radio(MicroBitEvent){
     {
         MicroBitEvent evt(MAC_LAYER, 12);
         macbufferallocated--;
-        delete received;
     }
 
 }
@@ -305,47 +296,46 @@ bool compare_mac_buffers(const MacBuffer * first, const MacBuffer * second){
     return first->frag < second->frag;
 }
 
-void MacLayer::addToDataReady(FragmentedPacket *buf){
-    ManagedBuffer p(buf->length);
+void MacLayer::addToDataReady(ManagedFragmentedPacket buf){
+    ManagedBuffer p(buf.length());
     uint8_t *bytes = p.getBytes();
     int len = 0;
-    vector<MacBuffer *>::iterator it;
-    for(it = buf->packets.begin(); it != buf->packets.end(); ++it)
+    vector<ManagedMacBuffer>::iterator it;
+    for(it = buf.packets().begin(); it != buf.packets().end(); ++it)
     {
-        uint8_t tmp = getLength((*it)->control);
-        memcpy(bytes+len,(*it)->payload, tmp);
+        uint8_t tmp = getLength((*it).control());
+        memcpy(bytes+len,(*it).payload().payload, tmp);
         len += tmp;
         macbufferallocated--;
-        delete *it;
     }
     inBuffer.insert(inBuffer.begin(), p);
     MicroBitEvent evt(MAC_LAYER, MAC_LAYER_PACKET_RECEIVED);
 }
 
-void MacLayer::addToFragmented(MacBuffer *fragment){
-    if(receive_buffer[fragment->source] == NULL)
+void MacLayer::addToFragmented(ManagedMacBuffer fragment){
+    if(receive_buffer[fragment.source()] == ManagedMacBufferFragmentReceived::Empty)
     {
-        macbufferfragmentedreceived++;
-        receive_buffer[fragment->source] = new MacBufferFragmentReceived;
-        receive_buffer[fragment->source]->source = fragment->source;
+        MacBufferFragmentReceived f;
+        f.source = fragment.source();
+        ManagedMacBufferFragmentReceived ff = ManagedMacBufferFragmentReceived::of(f);
+        receive_buffer[fragment.source()] = ff;
     }
-    MacBufferFragmentReceived *received_fragment = receive_buffer[fragment->source];
-    if(received_fragment->fragmented[fragment->seq_number] == NULL)
+    MacBufferFragmentReceived received_fragment = receive_buffer[fragment.source()];
+    if(received_fragment.fragmented[fragment.seq_number()] == FragmentedPacket::Empty)
     {
-        fragmentedpacket++;
-        FragmentedPacket *tmp = new FragmentedPacket;
-        tmp->lastReceived = false;
-        tmp->length = 0;
-        tmp->packet_number = 0;
-        tmp->timestamp = 0;
-        received_fragment->fragmented[fragment->seq_number] = tmp;        
+        FragmentedPacket tmp;
+        tmp.lastReceived = false;
+        tmp.length = 0;
+        tmp.packet_number = 0;
+        tmp.timestamp = 0;
+        received_fragment.fragmented[fragment.seq_number()] = tmp;        
     }
-    FragmentedPacket *fragments = received_fragment->fragmented[fragment->seq_number];
-    fragments->packets.push_back(fragment);
-    fragments->timestamp = system_timer_current_time();
+    FragmentedPacket fragments = received_fragment.fragmented[fragment.seq_number()];
+    fragments.packets.push_back(fragment);
+    fragments.timestamp = system_timer_current_time();
     if(isLast(fragment))
     {
-        fragments->lastReceived = true;
+        fragments.lastReceived = true;
         fragments->packet_number = fragment->frag;
     }
     fragments->length += getLength(fragment->control);
@@ -479,12 +469,16 @@ void MacLayer::idleTick(){
     uint64_t now = system_timer_current_time();
     for(it = waiting.begin(); it != waiting.end();)
     {
+        if(serial != NULL)
+            serial->send(MAC_LAYER,1,"first for");
         if(it->second->queued)
             ++it;
         else if(now - it->second->timestamp < MAC_LAYER_RETRANSMISSION_TIME)
             ++it;
         else if(it->second->attempt < MAC_LAYER_RETRANSMISSION_ATTEMPT)
         {
+            if(serial != NULL)
+                serial->send(MAC_LAYER,1,"strange");
             it->second->queued = true;
             if(outBuffer.empty())
             {
@@ -497,6 +491,8 @@ void MacLayer::idleTick(){
         }
         else
         {
+            if(serial != NULL)
+                serial->send(MAC_LAYER,1,"strange 1");
             MacBuffer *tmp = it->second;
             waiting.erase(it++);
             if(disconnected_destination.size() < 4)
@@ -518,6 +514,8 @@ void MacLayer::idleTick(){
     map<uint32_t, MacBufferFragmentReceived *>::iterator it1;
     for(it1 = receive_buffer.begin(); it1 != receive_buffer.end();)
     {
+        if(serial != NULL)
+            serial->send(MAC_LAYER,1,"impossibile");
         MacBufferFragmentReceived *f = it1->second;
         if(f == NULL)
         {
@@ -564,5 +562,8 @@ void MacLayer::idleTick(){
         }
         
     }
+    //if(serial != NULL)
+    //    serial->send(MAC_LAYER,1,"finito");
     
 }
+// 1
