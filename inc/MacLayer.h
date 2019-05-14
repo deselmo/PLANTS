@@ -3,6 +3,7 @@
 
 #include "MicroBit.h"
 #include "ManagedBuffer.h"
+#include "SerialCom.h"
 #include <map>
 #include <vector>
 
@@ -112,6 +113,7 @@ class MacLayer : public MicroBitComponent{
     std::map<uint16_t, MacBuffer *> waiting;            // packets sent which we are waiting for an ack
     std::map<uint8_t, MacBufferSent *> waiting_for_ack;
     std::vector<uint32_t> disconnected_destination;
+    SerialCom* serial;
 
     /**
      * Create a list of MacBuffer from the buffer passed the list
@@ -246,7 +248,7 @@ public:
     int macbufferfragmentedreceived;
     int fragmentedpacket;
 
-    MacLayer(MicroBit* uBit);
+    MacLayer(MicroBit* uBit, SerialCom* serial);
     void init();
 
     int send(uint8_t *buffer, int len, uint32_t dest);
