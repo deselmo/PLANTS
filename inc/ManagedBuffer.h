@@ -2,6 +2,7 @@
 #define DD_MANAGED_BUFFER_H
 
 #include "RefCounted.h"
+#include "ManagedString.h"
 
 struct ManagedPacketData : RefCounted
 {
@@ -48,7 +49,7 @@ class ManagedBuffer
       * ManagedBuffer p(16);         // Creates a ManagedBuffer 16 bytes long.
       * @endcode
       */
-    ManagedBuffer(int length);
+    ManagedBuffer(uint32_t length);
 
     /**
       * Constructor.
@@ -64,7 +65,7 @@ class ManagedBuffer
       * ManagedBuffer p(buf, 3);         // Creates a ManagedBuffer 3 bytes long.
       * @endcode
       */
-    ManagedBuffer(uint8_t *data, int length);
+    ManagedBuffer(uint8_t *data, uint32_t length);
 
     /**
       * Copy Constructor.
@@ -86,7 +87,7 @@ class ManagedBuffer
       *
       * @param length The length of the buffer to create.
       */
-    void init(uint8_t *data, int length);
+    void init(uint8_t *data, uint32_t length);
 
     /**
       * Destructor.
@@ -129,7 +130,7 @@ class ManagedBuffer
       * uint8_t data = p1[0];
       * @endcode
       */
-    uint8_t operator [] (int i) const;
+    uint8_t operator [] (uint32_t i) const;
 
     /**
       * Array access operation (modify).
@@ -143,7 +144,7 @@ class ManagedBuffer
       * p1[0] = 42;
       * @endcode
       */
-    uint8_t& operator [] (int i);
+    uint8_t& operator [] (uint32_t i);
 
     /**
       * Equality operation.
@@ -180,7 +181,7 @@ class ManagedBuffer
       * p1.setByte(0,255);              // Sets the first byte in the buffer to the value 255.
       * @endcode
       */
-    int setByte(int position, uint8_t value);
+    int setByte(uint32_t position, uint8_t value);
 
     /**
       * Determines the value of the given byte in the packet.
@@ -195,7 +196,7 @@ class ManagedBuffer
       * p1.getByte(0);                  // Returns 255.
       * @endcode
       */
-    int getByte(int position);
+    int getByte(uint32_t position);
 
     /**
       * Gets number of bytes in this buffer
@@ -207,9 +208,14 @@ class ManagedBuffer
       * p1.length(); // Returns 16.
       * @endcode
       */
-    int length();
+    uint32_t length();
 
     static ManagedBuffer EmptyPacket;
+
+
+    ManagedBuffer(const char* str);
+
+    ManagedBuffer(ManagedString);
 };
 
 #endif

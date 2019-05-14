@@ -27,7 +27,7 @@ ManagedBuffer::ManagedBuffer()
   * ManagedBuffer p(16);         // Creates a ManagedBuffer 16 bytes long.
   * @endcode
   */
-ManagedBuffer::ManagedBuffer(int length)
+ManagedBuffer::ManagedBuffer(uint32_t length)
 {
     this->init(NULL, length);
 }
@@ -46,7 +46,7 @@ ManagedBuffer::ManagedBuffer(int length)
   * ManagedBuffer p(buf, 3);         // Creates a ManagedBuffer 3 bytes long.
   * @endcode
   */
-ManagedBuffer::ManagedBuffer(uint8_t *data, int length)
+ManagedBuffer::ManagedBuffer(uint8_t *data, uint32_t length)
 {
     this->init(data, length);
 }
@@ -75,11 +75,8 @@ ManagedBuffer::ManagedBuffer(const ManagedBuffer &buffer)
   *
   * @param length The length of the buffer to create.
   */
-void ManagedBuffer::init(uint8_t *data, int length)
+void ManagedBuffer::init(uint8_t *data, uint32_t length)
 {
-    if (length < 0)
-        length = 0;
-
     ptr = (ManagedPacketData *) malloc(sizeof(ManagedPacketData) + length);
     ptr->init();
 
@@ -144,7 +141,7 @@ ManagedBuffer& ManagedBuffer::operator = (const ManagedBuffer &p)
   * uint8_t data = p1[0];
   * @endcode
   */
-uint8_t ManagedBuffer::operator [] (int i) const
+uint8_t ManagedBuffer::operator [] (uint32_t i) const
 {
     return ptr->payload[i];
 }
@@ -161,7 +158,7 @@ uint8_t ManagedBuffer::operator [] (int i) const
   * p1[0] = 42;
   * @endcode
   */
-uint8_t& ManagedBuffer::operator [] (int i)
+uint8_t& ManagedBuffer::operator [] (uint32_t i)
 {
     return ptr->payload[i];
 }
@@ -207,7 +204,7 @@ bool ManagedBuffer::operator== (const ManagedBuffer& p)
   * p1.setByte(0,255);              // Sets the first byte in the buffer to the value 255.
   * @endcode
   */
-int ManagedBuffer::setByte(int position, uint8_t value)
+int ManagedBuffer::setByte(uint32_t position, uint8_t value)
 {
     if (position < ptr->length)
     {
@@ -233,7 +230,7 @@ int ManagedBuffer::setByte(int position, uint8_t value)
   * p1.getByte(0);                  // Returns 255.
   * @endcode
   */
-int ManagedBuffer::getByte(int position)
+int ManagedBuffer::getByte(uint32_t position)
 {
     if (position < ptr->length)
         return ptr->payload[position];
@@ -261,7 +258,17 @@ uint8_t*ManagedBuffer::getBytes()
   * p1.length(); // Returns 16.
   * @endcode
   */
-int ManagedBuffer::length()
+uint32_t ManagedBuffer::length()
 {
     return ptr->length;
+}
+
+ManagedBuffer::ManagedBuffer(const char* str) : ManagedBuffer(ManagedString(str)) {}
+
+ManagedBuffer::ManagedBuffer(ManagedString managed_string) {
+    this->init(NULL, managed_string.length());
+
+    for(uint16_t i = 0; i < managed_string.length(); i++) {
+      this->setByte(i, managed_string.charAt(i));
+    }
 }

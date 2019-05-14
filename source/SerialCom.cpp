@@ -51,6 +51,7 @@ void execute_tasks(void *par){
 }
 
 void SerialCom::init(){
+    uBit->serial.baud(9600);
     uBit->messageBus.listen(SERIAL_ID, SERIAL_DATA_READY, this, &SerialCom::send_to_serial);
     state = 0;
     read = 0;
@@ -60,6 +61,20 @@ void SerialCom::init(){
 }
 
 
+
+void SerialCom::send(uint8_t id, uint8_t value, uint8_t *buf, uint32_t len){
+    ManagedBuffer b(len + sizeof(uint8_t)*2 + sizeof(uint32_t));
+    b[0] = id;
+    b[1] = value;
+    uint8_t * bytes = b.getBytes();
+    memcpy(bytes+sizeof(uint8_t)*2,&len,sizeof(uint32_t));
+    memcpy(bytes+sizeof(uint8_t)*2+sizeof(uint32_t),buf,len);
+    send(b);
+}
+
+void SerialCom::send(uint8_t id, uint8_t value, ManagedBuffer buf){
+    send(id,value,buf.getBytes(), buf.length());
+}
 
 void SerialCom::send(uint8_t *buf, uint32_t len){
     ManagedBuffer b(buf,len);
