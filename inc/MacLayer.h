@@ -71,18 +71,24 @@
 
 struct Payload;
 struct MacBuffer;
+struct FragmentedPacket;
+struct MacBufferFragmentReceived;
+struct MacBufferSent;
 
 struct ManagedMacBuffer{
     ManagedBuffer b;
 
     static ManagedMacBuffer of(MacBuffer&);
 
+    static ManagedMacBuffer Empty;
+
     bool operator==(const ManagedMacBuffer& other);
 
     bool queued();
     void queued(bool);
 
-    void timestamp(uint32_t);
+    uint64_t timestamp();
+    void timestamp(uint64_t);
 
     
 
@@ -124,9 +130,20 @@ struct ManagedFragmentedPacket{
 
     bool operator==(const ManagedFragmentedPacket& other);
 
-    static ManagedFragmentedPacket of(FragmentedPacket);
+    static ManagedFragmentedPacket of(FragmentedPacket&);
 
     uint16_t length();
+    void length(uint16_t);
+
+    uint64_t timestamp();
+    void timestamp(uint64_t);
+
+    bool lastReceived();
+    void lastReceived(bool);
+
+    uint8_t packet_number();
+    void packet_number(uint8_t);
+
     std::vector<ManagedMacBuffer> packets();
 
 };
@@ -149,7 +166,9 @@ struct ManagedMacBufferFragmentReceived{
     bool operator==(const ManagedMacBufferFragmentReceived& other);
 
 
-    static ManagedMacBufferFragmentReceived of(MacBufferFragmentReceived);
+    static ManagedMacBufferFragmentReceived of(MacBufferFragmentReceived&);
+
+    std::map<uint8_t, ManagedFragmentedPacket> fragmented();
 };
 
 struct MacBufferFragmentReceived{
@@ -161,7 +180,18 @@ struct MacBufferFragmentReceived{
 struct ManagedMacBufferSent{
     ManagedBuffer b;
     
-    static ManagedMacBufferSent of(MacBufferSent);
+    static ManagedMacBufferSent of(MacBufferSent&);
+
+    static ManagedMacBufferSent Empty;
+
+    bool operator==(const ManagedMacBufferSent& other);
+
+    uint8_t received();
+    void received(uint8_t);
+
+    uint8_t total();
+
+
 };
 
 struct MacBufferSent{
@@ -275,8 +305,6 @@ class MacLayer : public MicroBitComponent{
     void accomplishAck(ManagedMacBuffer ack);
     bool isComplete(ManagedFragmentedPacket fragmented);
     bool isLast(ManagedMacBuffer fragment);
-    void orderPackets(ManagedFragmentedPacket fragmented);
-
 
     /**
      * This function retrieve the length field from a control bits

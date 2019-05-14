@@ -403,7 +403,7 @@
         bool sink_mode
     )
         : uBit                (uBit)
-        , mac_layer           (MacLayer(uBit))
+        , mac_layer           (MacLayer(uBit, serial))
         , serial              (serial)
         , network_id          (network_id)
         , sink_mode           (sink_mode)

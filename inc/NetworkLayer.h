@@ -271,7 +271,7 @@ class NetworkLayer : public MicroBitComponent {
             MicroBit* uBit,
             uint16_t network_id,
             SerialCom* serial,
-            bool sink_mode = false
+            bool sink_mode
         );
         
         void init();
