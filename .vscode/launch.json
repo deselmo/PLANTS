@@ -1,3 +1,4 @@
+
 {
     "version": "0.2.0",
     "configurations": [
@@ -15,7 +16,7 @@
             "serverLaunchTimeout": 20000,
             "filterStderr": true,
             "filterStdout": false,
-            "serverStarted": "GDB/ server/ started",
+            "serverStarted": "GDB\\ server\\ started",
             "logging": {
                 "moduleLoad": false,
                 "trace": true,
@@ -23,13 +24,13 @@
                 "programOutput": true,
                 "exceptions": false
             },
-            "windows": {
+            "linux": {
                 "MIMode": "gdb",
-                "MIDebuggerPath": "C:\\Program Files (x86)\\GNU Tools Arm Embedded\\4.9 2015q2\\bin\\arm-none-eabi-gdb.exe",
-                "debugServerPath": "C:\\yotta\\workspace\\Scripts\\pyocd-gdbserver.exe",
+                "MIDebuggerPath": "arm-none-eabi-gdb",
+                "debugServerPath": "pyocd-gdbserver",
                 "debugServerArgs": "--persist -t nrf51 -bh -r",
                 "setupCommands": [
-                    { "text": "-environment-cd ${workspaceRoot}\\build\\bbc-microbit-classic-gcc\\source" },
+                    { "text": "-environment-cd ${workspaceRoot}/build/bbc-microbit-classic-gcc/source" },
                     { "text": "-target-select remote localhost:3333", "description": "connect to target", "ignoreFailures": false },
                     { "text": "-interpreter-exec console \"monitor reset\"", "ignoreFailures": false },
                     { "text": "-interpreter-exec console \"monitor halt\"", "ignoreFailures": false },
@@ -37,12 +38,6 @@
                     { "text": "-file-exec-file ./plants-combined.hex", "description": "load file", "ignoreFailures": false},
                     { "text": "-file-symbol-file ./plants", "description": "load synbol file", "ignoreFailures": false},
                 ]
-            },
-            "linux": {
-                "MIMode": "gdb",
-                "MIDebuggerPath": "/usr/bin/arm-none-eabi-gdb",
-                "debugServerPath": "/usr/bin/pyocd-gdbserver",
-                "debugServerArgs": "--persist -t nrf51 -bh -r"
             }
         }
     ]
