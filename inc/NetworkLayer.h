@@ -22,6 +22,8 @@ enum {
     NETWORK_LAYER_INIT,
     NETWORK_LAYER_RT_BROKEN,
     NETWORK_LAYER_NODE_CONNECTED,
+    NETWORK_LAYER_SEND_COMMAND_OK,
+    NETWORK_LAYER_SEND_COMMAND_FAIL,
 };
 
     // Internal events
@@ -46,6 +48,14 @@ enum DDSend_state {
     DD_WAIT_TO_BROADCAST,
     DD_WAIT_TO_SINK,
     DD_WAIT_TO_SUBTREE,
+};
+
+
+enum DDSerialSendState {
+    DD_SERIAL_SEND_NONE,
+    DD_SERIAL_SEND_CLEAR,
+    DD_SERIAL_SEND_GET,
+    DD_SERIAL_SEND_PUT,
 };
 
 
@@ -197,8 +207,10 @@ class NetworkLayer : public MicroBitComponent {
 
     // needed for the serial
     volatile bool serial_initiated = false;
-    volatile bool serial_waiting = false;
-    ManagedBuffer serial_received_buffer;
+    DDSerialSendState serial_send_state = DD_SERIAL_SEND_NONE;
+    uint32_t serial_send_get_destination = 0;
+    uint32_t serial_send_put_origin = 0;
+    ManagedBuffer serial_send_get_payload;
     ManagedBuffer serial_in_sending_buffer;
 
 
@@ -230,9 +242,9 @@ class NetworkLayer : public MicroBitComponent {
         // serial comunication
         void serial_wait_init();
 
-        bool serial_get_node_route(uint32_t destination, DDNodeRoute&);
-        bool serial_put_node_route(DDNodeRoute);
-        bool serial_clear_node_routes();
+        void serial_get_node_route(uint32_t destination);
+        void serial_put_node_route(DDNodeRoute);
+        void serial_clear_node_routes();
         void serial_send(ManagedBuffer payload);
 
 
@@ -277,10 +289,10 @@ class NetworkLayer : public MicroBitComponent {
         uint32_t get_source() { return this->source; };
 
         // send to the rely
-        bool send(ManagedBuffer);
+        void send(ManagedBuffer);
 
         // if we know a path, only the sink
-        bool send(ManagedBuffer, uint32_t destination);
+        void send(ManagedBuffer, uint32_t destination);
 
         // interface provided to application layer
         ManagedBuffer recv();

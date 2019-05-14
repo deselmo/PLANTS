@@ -461,23 +461,25 @@
         }
 
         this->source = microbit_serial_number();
-        this->serial_received_buffer = ManagedBuffer::EmptyPacket;
         this->serial_in_sending_buffer = ManagedBuffer::EmptyPacket;
+        this->serial_send_get_payload = ManagedBuffer::EmptyPacket;
 
         fiber_add_idle_component(this);
     }
 
 
     void NetworkLayer::idleTick() {
-        if(this->serial_waiting) return;
-
-        if (this->sink_mode &&
-            this->elapsed_from_last_operation(NETWORK_LAYER_DD_RT_INIT_INTERVAL)
-        ) {
-            this->incr_broadcast_counter();
-            this->send_rt_init();
+        if(this->serial_send_state != DD_SERIAL_SEND_NONE) {
+            return;
         }
-        else if(!this->rt_formed &&
+
+        if(this->sink_mode) {
+            if(this->elapsed_from_last_operation(NETWORK_LAYER_DD_RT_INIT_INTERVAL)) {
+                this->serial->send(101,1,"timeout: send initialing new rt_init");
+
+                this->incr_broadcast_counter();
+            }
+        } else if(!this->rt_formed &&
                 this->elapsed_from_last_operation(NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL)
         ) {
             this->send_join_request();
@@ -511,22 +513,17 @@
     }
 
 
-    bool NetworkLayer::send(ManagedBuffer payload) {
+    void NetworkLayer::send(ManagedBuffer payload) {
         this->send_data(payload);
-
-        return true;
     }
 
-    bool NetworkLayer::send(ManagedBuffer payload, uint32_t destination) {
+    void NetworkLayer::send(ManagedBuffer payload, uint32_t destination) {
         DDNodeRoute node_route;
 
-        if(!this->serial_get_node_route(destination, node_route)) {
-            return false;
-        }
+        this->serial_send_get_destination = destination;
+        this->serial_send_get_payload = payload;
 
-        this->send_command(payload, node_route, destination);
-
-        return true;
+        this->serial_get_node_route(destination);
     }
 
 
@@ -591,14 +588,9 @@
                         return;
                     }
 
-                    this->serial_put_node_route(node_route);
+                    this->serial_send_put_origin = dd_packet.origin;
 
-                    this->inBufferNodes.push(tuple<bool, uint32_t, uint64_t>(
-                        true,
-                        dd_packet.origin,
-                        broadcast_counter
-                    ));
-                    MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_NODE_CONNECTED);
+                    this->serial_put_node_route(node_route);
                 } break;
 
                 case DD_JOIN: {
@@ -717,7 +709,9 @@
         this->sending_to = dd_packet.forward;
 
         ManagedBuffer packet = dd_packet.toManagedBuffer();
+        this->serial->send(101,1,"sending..");
         this->mac_layer.send(packet.getBytes(), packet.length(), dd_packet.forward);
+        this->serial->send(101,1,"sended");
 
         if(this->send_state == DD_WAIT_TO_BROADCAST) {
             this->send_state = DD_READY_TO_SEND;
@@ -761,6 +755,9 @@
     void NetworkLayer::recv_from_serial(ManagedBuffer serial_received_buffer) {
         uint8_t code = serial_received_buffer.getByte(0);
 
+        this->serial->send(101,1,"received message from serial");
+        this->serial->send(101,1, serial_received_buffer);
+
         if(code == DD_SERIAL_INIT) {
             uint8_t mode = DD_SERIAL_INIT_ACK;
 
@@ -769,7 +766,7 @@
                 NETWORK_LAYER_SERIAL_ROUTING_TABLE,
                 ManagedBuffer(&mode, sizeof(mode))
             );
-            if(this->serial_waiting) {
+            if(this->serial_send_state != DD_SERIAL_SEND_NONE) {
                 this->serial->send(
                     NETWORK_LAYER_INTERNALS,
                     NETWORK_LAYER_SERIAL_ROUTING_TABLE,
@@ -780,9 +777,59 @@
             this->serial_initiated = true;
         }
         
-        else if(this->serial_waiting) {
-            this->serial_received_buffer = serial_received_buffer;
-            this->serial_waiting = false;
+        else {
+            this->serial->send(101,1,"managing received message..");
+            switch(this->serial_send_state) {
+                case DD_SERIAL_SEND_NONE:
+                    this->serial->send(101,1,"   NONE");
+                    return;
+
+                case DD_SERIAL_SEND_CLEAR:
+                    this->serial->send(101,1,"   CLEAR");
+
+                    this->send_rt_init();
+
+                    break;
+
+                case DD_SERIAL_SEND_GET: {
+                    this->serial->send(101,1,"   GET");
+
+                    DDNodeRoute node_route;
+
+                    if(serial_received_buffer == ManagedBuffer::EmptyPacket) {
+                        MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_SEND_COMMAND_FAIL);
+                    }
+
+                    node_route = DDNodeRoute {
+                        .size = serial_received_buffer.length() / sizeof(uint32_t),
+                        .addresses = serial_received_buffer
+                    };
+
+                    this->send_command(
+                        this->serial_send_get_payload,
+                        node_route,
+                        this->serial_send_get_destination
+                    );
+
+                    MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_SEND_COMMAND_OK);
+
+                } break;
+
+                case DD_SERIAL_SEND_PUT:
+                    this->serial->send(101,1,"   PUT");
+
+                    this->inBufferNodes.push(std::tuple<bool, uint32_t, uint64_t>(
+                        true,
+                        this->serial_send_put_origin,
+                        broadcast_counter
+                    ));
+                    MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_NODE_CONNECTED);
+
+                    break;
+            }
+            
+            this->serial_send_state = DD_SERIAL_SEND_NONE;
+            
         }
     }
 
@@ -860,20 +907,17 @@
     void NetworkLayer::serial_send(ManagedBuffer packet) {
         this->serial_in_sending_buffer = packet;
 
-        this->serial_waiting = true;
+        this->serial->send(101,1,"serial sending");
+        this->serial->send(101,1,packet);
 
         this->serial->send(
             NETWORK_LAYER_INTERNALS,
             NETWORK_LAYER_SERIAL_ROUTING_TABLE,
             packet
         );
-
-        while(this->serial_waiting) {
-            this->uBit->sleep(10);
-        }
     }
 
-    bool NetworkLayer::serial_get_node_route(uint32_t destination, DDNodeRoute& node_route) {
+    void NetworkLayer::serial_get_node_route(uint32_t destination) {
         uint8_t mode = DD_SERIAL_GET;
         ManagedBuffer packet(sizeof(mode) + sizeof(destination));
 
@@ -889,21 +933,11 @@
             sizeof(destination)
         );
 
+        this->serial_send_state = DD_SERIAL_SEND_GET;
         this->serial_send(packet);
-
-        if(this->serial_received_buffer == ManagedBuffer::EmptyPacket) {
-            return false;
-        }
-
-        node_route = DDNodeRoute {
-            .size = this->serial_received_buffer.length() / sizeof(uint32_t),
-            .addresses = this->serial_received_buffer
-        };
-
-        return true;
     }
 
-    bool NetworkLayer::serial_put_node_route(DDNodeRoute node_route) {
+    void NetworkLayer::serial_put_node_route(DDNodeRoute node_route) {
         uint8_t mode = DD_SERIAL_PUT;
         ManagedBuffer packet(sizeof(mode) + node_route.addresses.length());
 
@@ -919,49 +953,17 @@
             node_route.addresses.length()
         );
 
+        this->serial_send_state = DD_SERIAL_SEND_PUT;
         this->serial_send(packet);
-
-        bool result;
-
-        if(this->serial_received_buffer.length() != sizeof(result)) {
-            return false;
-        }
-
-        memcpy(
-            &result,
-            this->serial_received_buffer.getBytes(),
-            sizeof(result)
-        );
-
-        return result;
     }
 
-    bool NetworkLayer::serial_clear_node_routes() {
+    void NetworkLayer::serial_clear_node_routes() {
         uint8_t mode = DD_SERIAL_CLEAR;
 
-        this->serial_waiting = true;
-        this->serial->send(
-            NETWORK_LAYER_INTERNALS,
-            NETWORK_LAYER_SERIAL_ROUTING_TABLE,
-            ManagedBuffer(&mode, sizeof(mode))
-        );
-        while(this->serial_waiting) {
-            this->uBit->sleep(10);
-        }
+        ManagedBuffer packet(&mode, sizeof(mode));
 
-        bool result;
-
-        if(this->serial_received_buffer.length() != sizeof(result)) {
-            return false;
-        }
-
-        memcpy(
-            &result,
-            this->serial_received_buffer.getBytes(),
-            sizeof(result)
-        );
-
-        return result;
+        this->serial_send_state = DD_SERIAL_SEND_CLEAR;
+        this->serial_send(packet);
     }
 
     // send functions
@@ -983,6 +985,7 @@
     }
 
     void NetworkLayer::send_rt_init() {
+        this->serial->send(101,1,"pushing oin queue..");
         this->outBufferPackets.push(
             DDPacket::of (
                 this,
@@ -996,6 +999,7 @@
                 }
             )
         );
+        this->serial->send(101,1,"pushed");
     }
 
     void NetworkLayer::send_rt_ack() {
