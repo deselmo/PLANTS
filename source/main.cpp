@@ -8,8 +8,7 @@
 
 MicroBit uBit;
 SerialCom serial(&uBit);
-NetworkLayer nl(&uBit, NETWORK_ID, &serial);
-// MacLayer ml(&uBit);
+NetworkLayer nl(&uBit, NETWORK_ID, &serial, true);
 
 void send(const char* str) {
     serial.send(MAIN, DEBUG, str);
@@ -23,12 +22,8 @@ int main() {
     nl.init();
     uBit.display.print('S');
 
-    uint64_t body = 1;
-
-    ManagedBuffer payload((uint8_t*)&body, sizeof(body));
 
     while(true) {
-        // ml.send(payload, 0);
         if(uBit.buttonA.isPressed()) {
             uBit.display.print("a");
             send("a");

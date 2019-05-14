@@ -13,7 +13,7 @@
 #define NETWORK_LAYER_INTERNALS 44
 
 #define NETWORK_BROADCAST 0
-#define NETWORK_LAYER_DD_RT_INIT_INTERVAL      60000 // 1 minute
+#define NETWORK_LAYER_DD_RT_INIT_INTERVAL      100 // 1 minute
 #define NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL 1000  // 1 second
 
 enum {
@@ -266,7 +266,7 @@ class NetworkLayer : public MicroBitComponent {
         void send_leave(ManagedBuffer payload, uint32_t origin);
 
 
-    public:        
+    public:
         NetworkLayer(
             MicroBit* uBit,
             uint16_t network_id,
