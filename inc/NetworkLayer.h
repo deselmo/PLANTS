@@ -266,21 +266,12 @@ class NetworkLayer : public MicroBitComponent {
         void send_leave(ManagedBuffer payload, uint32_t origin);
 
 
-    public:
-        // create a new network layer not in sink_mode
-        // uBit must be initialized with the init method
-        NetworkLayer(
-            MicroBit* uBit,
-            uint16_t network_id
-        );
-
-        
-        // create a new network layer in sink_mode
-        // uBit and serial must be initialized with the init method
+    public:        
         NetworkLayer(
             MicroBit* uBit,
             uint16_t network_id,
-            SerialCom* serial
+            SerialCom* serial,
+            bool sink_mode = false
         );
         
         void init();

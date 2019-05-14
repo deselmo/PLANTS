@@ -398,32 +398,19 @@
 // NetworkLayer {
     NetworkLayer::NetworkLayer(
         MicroBit*  uBit,
-        uint16_t   network_id
-    )
-        : uBit                (uBit)
-        , mac_layer           (MacLayer(uBit))
-        , serial              (NULL)
-        , network_id          (network_id)
-        , sink_mode           (false)
-    {};
-
-
-    NetworkLayer::NetworkLayer(
-        MicroBit*  uBit,
         uint16_t   network_id,
-        SerialCom* serial
+        SerialCom* serial,
+        bool sink_mode
     )
         : uBit                (uBit)
         , mac_layer           (MacLayer(uBit))
         , serial              (serial)
         , network_id          (network_id)
-        , sink_mode           (true)
+        , sink_mode           (sink_mode)
     {};
 
 
     void NetworkLayer::init() {
-        this->mac_layer.init();
-
         this->uBit->messageBus.listen(
             MAC_LAYER,
             MAC_LAYER_PACKET_RECEIVED,
@@ -460,6 +447,8 @@
             this->serial_wait_init();
         }
 
+        this->mac_layer.init();
+
         this->source = microbit_serial_number();
         this->serial_in_sending_buffer = ManagedBuffer::EmptyPacket;
         this->serial_send_get_payload = ManagedBuffer::EmptyPacket;
@@ -482,6 +471,7 @@
         } else if(!this->rt_formed &&
                 this->elapsed_from_last_operation(NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL)
         ) {
+            this->serial->send(101,1,"timeout: send join request");
             this->send_join_request();
         }
 
