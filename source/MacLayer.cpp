@@ -176,7 +176,7 @@ void MacLayer::send_to_radio(MicroBitEvent){
         {
             ManagedBuffer b("sent message not brodcast");
             if(serial != NULL)
-                serial->send(MAC_LAYER,1,b)
+                serial->send(MAC_LAYER,1,b);
             toSend->timestamp = system_timer_current_time();
             uint16_t hash = getHash(toSend);
             if(waiting[hash] == toSend)
