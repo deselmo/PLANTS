@@ -65,12 +65,14 @@ int MacLayer::send(uint8_t *buffer, int len, uint32_t dest){
         toSend->insert(toSend->begin(),tmp);
     }
     macbuffersent++;
-    MacBufferSent *sent = new MacBufferSent;
-    sent->seq_number = seq_number-1;
-    sent->total = toSend->size();
-    sent->received = 0;
-    waiting_for_ack[seq_number-1] = sent;
-    
+    if(dest != 0)
+    {
+        MacBufferSent *sent = new MacBufferSent;
+        sent->seq_number = seq_number-1;
+        sent->total = toSend->size();
+        sent->received = 0;
+        waiting_for_ack[seq_number-1] = sent;
+    }
 
 
     //outBuffer is empty
