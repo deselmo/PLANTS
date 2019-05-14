@@ -50,9 +50,11 @@ enum DDSend_state {
 
 
 enum DDSerialMode {
-    DD_SERIAL_GET   = 0,
-    DD_SERIAL_PUT   = 1,
-    DD_SERIAL_CLEAR = 2,
+    DD_SERIAL_GET       = 0,
+    DD_SERIAL_PUT       = 1,
+    DD_SERIAL_CLEAR     = 2,
+    DD_SERIAL_INIT      = 3,
+    DD_SERIAL_INIT_ACK  = 4,
 };
 
 
@@ -165,8 +167,8 @@ struct DDPayloadWithNodeRoute {
 
 class NetworkLayer : public MicroBitComponent {
     MicroBit *uBit;
-    SerialCom *serial;
     MacLayer mac_layer;
+    SerialCom *serial;
 
     std::queue<DDPacket> outBufferPackets;
 
@@ -194,8 +196,9 @@ class NetworkLayer : public MicroBitComponent {
 
 
     // needed for the serial
+    volatile bool serial_initiated = false;
     volatile bool serial_waiting = false;
-    ManagedBuffer received_buffer;
+    ManagedBuffer serial_received_buffer;
 
 
     private:
@@ -224,9 +227,11 @@ class NetworkLayer : public MicroBitComponent {
         void put_store_broadcast_counter();
 
         // serial comunication
-        bool get_serial_node_route(uint32_t destination, DDNodeRoute&);
-        bool put_serial_node_route(DDNodeRoute);
-        bool clear_serial_node_routes();
+        void serial_wait_init();
+
+        bool serial_get_node_route(uint32_t destination, DDNodeRoute&);
+        bool serial_put_node_route(DDNodeRoute);
+        bool serial_clear_node_routes();
 
 
         // send functions
@@ -281,7 +286,7 @@ class NetworkLayer : public MicroBitComponent {
         // interface provided to application layer
         std::tuple<bool, uint32_t, uint64_t> recv_node();
         
-        virtual void systemTick();
+        virtual void idleTick();
 };
 
 #endif
