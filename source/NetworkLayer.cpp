@@ -435,7 +435,7 @@
             this, &NetworkLayer::packet_timeout
         );
 
-        if(this->sink_mode) {
+        if(this->sink_mode || this->serial) {
             this->get_store_broadcast_counter();
 
             this->serial->addListener(
@@ -464,14 +464,14 @@
 
         if(this->sink_mode) {
             if(this->elapsed_from_last_operation(NETWORK_LAYER_DD_RT_INIT_INTERVAL)) {
-                this->serial->send(101,1,"timeout: send initialing new rt_init");
+                this->serial_send_debug("timeout: send initialing new rt_init");
 
                 this->incr_broadcast_counter();
             }
         } else if(!this->rt_formed &&
                 this->elapsed_from_last_operation(NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL)
         ) {
-            this->serial->send(101,1,"timeout: send join request");
+            this->serial_send_debug("timeout: send join request");
             this->send_join_request();
         }
 
@@ -699,9 +699,9 @@
         this->sending_to = dd_packet.forward;
 
         ManagedBuffer packet = dd_packet.toManagedBuffer();
-        this->serial->send(101,1,"sending..");
+        this->serial_send_debug("mac sending..");
         this->mac_layer.send(packet.getBytes(), packet.length(), dd_packet.forward);
-        this->serial->send(101,1,"sended");
+        this->serial_send_debug("mac sended");
 
         if(this->send_state == DD_WAIT_TO_BROADCAST) {
             this->send_state = DD_READY_TO_SEND;
@@ -745,8 +745,8 @@
     void NetworkLayer::recv_from_serial(ManagedBuffer serial_received_buffer) {
         uint8_t code = serial_received_buffer.getByte(0);
 
-        this->serial->send(101,1,"received message from serial");
-        this->serial->send(101,1, serial_received_buffer);
+        this->serial_send_debug("received message from serial");
+        this->serial_send_debug( serial_received_buffer);
 
         if(code == DD_SERIAL_INIT) {
             uint8_t mode = DD_SERIAL_INIT_ACK;
@@ -768,21 +768,21 @@
         }
         
         else {
-            this->serial->send(101,1,"managing received message..");
+            this->serial_send_debug("managing received message..");
             switch(this->serial_send_state) {
                 case DD_SERIAL_SEND_NONE:
-                    this->serial->send(101,1,"   NONE");
+                    this->serial_send_debug("   NONE");
                     return;
 
                 case DD_SERIAL_SEND_CLEAR:
-                    this->serial->send(101,1,"   CLEAR");
+                    this->serial_send_debug("   CLEAR");
 
                     this->send_rt_init();
 
                     break;
 
                 case DD_SERIAL_SEND_GET: {
-                    this->serial->send(101,1,"   GET");
+                    this->serial_send_debug("   GET");
 
                     DDNodeRoute node_route;
 
@@ -806,7 +806,7 @@
                 } break;
 
                 case DD_SERIAL_SEND_PUT:
-                    this->serial->send(101,1,"   PUT");
+                    this->serial_send_debug("   PUT");
 
                     this->inBufferNodes.push(std::tuple<bool, uint32_t, uint64_t>(
                         true,
@@ -897,8 +897,8 @@
     void NetworkLayer::serial_send(ManagedBuffer packet) {
         this->serial_in_sending_buffer = packet;
 
-        this->serial->send(101,1,"serial sending");
-        this->serial->send(101,1,packet);
+        this->serial_send_debug("serial sending");
+        this->serial_send_debug(packet);
 
         this->serial->send(
             NETWORK_LAYER_INTERNALS,
@@ -906,6 +906,13 @@
             packet
         );
     }
+
+
+    void NetworkLayer::serial_send_debug(ManagedBuffer message) {
+        if(this->serial != NULL)
+            this->serial->send(101, 1, message);
+    }
+ 
 
     void NetworkLayer::serial_get_node_route(uint32_t destination) {
         uint8_t mode = DD_SERIAL_GET;
@@ -975,7 +982,7 @@
     }
 
     void NetworkLayer::send_rt_init() {
-        this->serial->send(101,1,"pushing oin queue..");
+        this->serial_send_debug("pushing oin queue..");
         this->outBufferPackets.push(
             DDPacket::of (
                 this,
@@ -989,7 +996,7 @@
                 }
             )
         );
-        this->serial->send(101,1,"pushed");
+        this->serial_send_debug("pushed");
     }
 
     void NetworkLayer::send_rt_ack() {
