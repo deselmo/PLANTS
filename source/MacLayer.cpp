@@ -353,7 +353,7 @@ void MacLayer::addToFragmented(MacBuffer *fragment){
     fragments->length += getLength(fragment->control);
     if(fragments->lastReceived)
     {
-        if(fragments->packets.size() == 1 || fragments->packets.size() == fragments->packet_number)
+        if((fragments->packets.size() == 1 && fragments->packet_number == 0) || fragments->packets.size() == fragments->packet_number)
         {
             received_fragment->fragmented.erase(fragment->seq_number);
             std::sort(fragments->packets.begin(),fragments->packets.end(),compare_mac_buffers);
