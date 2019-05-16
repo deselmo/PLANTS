@@ -17,7 +17,7 @@ void execute_tasks(void *par){
                 serial->value = serial->uBit->serial.read();
                 serial->state = 2;
             case 2:
-                serial->read += serial->uBit->serial.read(((uint8_t *) &(serial->len)),sizeof(uint32_t));
+                serial->read += serial->uBit->serial.read(((uint8_t *) &(serial->len)+serial->read),sizeof(uint32_t)-serial->read);
                 if(serial->read == 4)
                 {
                     serial->state = 3;
