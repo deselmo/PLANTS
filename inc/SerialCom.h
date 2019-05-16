@@ -5,6 +5,12 @@
 #define SERIAL_ID 300
 #define SERIAL_DATA_READY 1
 
+
+#define RECV_FIRST_BYTE 2
+#define RECV_SECOND_BYTE 3
+#define RECV_LENGTH 4
+#define RECV_PAYLOAD 5
+
 #include "mbed.h"
 #include "MicroBit.h"
 #include "MemberFunctionCallbackSerial.h"
@@ -37,10 +43,15 @@ class SerialCom {
 
     
     void send_to_serial(MicroBitEvent);
+    void recv_first_byte(MicroBitEvent);
+    void recv_second_byte(MicroBitEvent);
+    void recv_length(MicroBitEvent);
+    void recv_payload(MicroBitEvent);
 
 public:
     SerialCom(MicroBit *);
     void init();
+    void test_init();
     friend void execute_tasks(void *);
     template <typename T>
     void addListener(uint8_t, uint8_t, T* object, void (T::*handle)(ManagedBuffer));

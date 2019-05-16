@@ -50,6 +50,56 @@ void execute_tasks(void *par){
     }
 }
 
+void SerialCom::recv_first_byte(MicroBitEvent e){
+    id = uBit->serial.read();
+    MicroBitEvent evt(SERIAL_ID, RECV_SECOND_BYTE);
+}
+
+void SerialCom::recv_second_byte(MicroBitEvent e){
+    value = uBit->serial.read();
+    MicroBitEvent evt(SERIAL_ID, RECV_LENGTH);
+}
+
+void SerialCom::recv_length(MicroBitEvent e){
+    read += uBit->serial.read((uint8_t *)&len+read,sizeof(uint32_t) - read);
+    if(read == sizeof(uint32_t))
+    {
+        read = 0;
+        MicroBitEvent evt(SERIAL_ID, RECV_PAYLOAD);
+    }
+    else
+    {
+        MicroBitEvent evt(SERIAL_ID, RECV_LENGTH);
+    }
+}
+
+void SerialCom::recv_payload(MicroBitEvent e){
+    if(buf == NULL)
+        buf = new uint8_t [len];
+    read += uBit->serial.read(buf + read, len - read);
+    if (read == len)
+    {
+         ManagedBuffer b(buf, len);
+         uint16_t hash = id << 8;
+         hash += value;
+         Listener *head = listeners[hash];
+         while(head != NULL)
+         {
+             head->cb->fire(b);
+             head = head->next;
+         }
+         delete [] buf;
+         buf = NULL;
+         read = 0;
+         MicroBitEvent evt(SERIAL_ID, RECV_FIRST_BYTE);
+    }
+    else
+    {
+        MicroBitEvent evt(SERIAL_ID, RECV_PAYLOAD);
+    }
+    
+}
+
 void SerialCom::init(){
     uBit->serial.baud(9600);
     uBit->messageBus.listen(SERIAL_ID, SERIAL_DATA_READY, this, &SerialCom::send_to_serial);
@@ -60,6 +110,20 @@ void SerialCom::init(){
     create_fiber(&execute_tasks, (void *) this);
 }
 
+
+void SerialCom::test_init(){
+    uBit->serial.baud(9600);
+    uBit->messageBus.listen(SERIAL_ID, SERIAL_DATA_READY, this, &SerialCom::send_to_serial);
+    uBit->messageBus.listen(SERIAL_ID, RECV_FIRST_BYTE, this, &SerialCom::recv_first_byte);
+    uBit->messageBus.listen(SERIAL_ID, RECV_SECOND_BYTE, this, &SerialCom::recv_second_byte);
+    uBit->messageBus.listen(SERIAL_ID, RECV_LENGTH, this, &SerialCom::recv_length);
+    uBit->messageBus.listen(SERIAL_ID, RECV_PAYLOAD, this, &SerialCom::recv_payload);
+    state = 0;
+    read = 0;
+    buf = NULL;
+    sent = 0;
+    MicroBitEvent evt(SERIAL_ID, RECV_FIRST_BYTE);
+}
 
 
 void SerialCom::send(uint8_t id, uint8_t value, uint8_t *buf, uint32_t len){
