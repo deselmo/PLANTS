@@ -7,6 +7,16 @@
         "vector": "cpp",
         "initializer_list": "cpp",
         "string_view": "cpp",
-        "list": "cpp"
-    }
+        "list": "cpp",
+        "queue": "cpp",
+        "map": "cpp",
+        "istream": "cpp",
+        "optional": "cpp",
+        "ostream": "cpp",
+        "system_error": "cpp",
+        "type_traits": "cpp"
+    },
+    "python.linting.pep8Enabled": false,
+    "python.linting.pylintEnabled": true,
+    "python.linting.enabled": true
 }

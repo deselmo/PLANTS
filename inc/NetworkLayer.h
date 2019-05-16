@@ -230,6 +230,7 @@ class NetworkLayer : public MicroBitComponent {
     const bool     sink_mode;
     uint32_t source;
 
+    const bool debug;
 
     volatile uint64_t broadcast_counter;
     volatile bool     rt_formed = false;
@@ -251,6 +252,7 @@ class NetworkLayer : public MicroBitComponent {
     ManagedBuffer serial_in_sending_buffer;
     volatile bool serial_wait_route_found = false;
     volatile bool serial_route_found = false;
+    ManagedBuffer serial_received_buffer;
 
 
     private:
@@ -261,6 +263,7 @@ class NetworkLayer : public MicroBitComponent {
         void recv_from_mac(MicroBitEvent); // evt handler for MAC_LAYER_PACKET_RECEIVED events
 
         void recv_from_serial(ManagedBuffer);
+        void recv_from_serial(MicroBitEvent);
 
 
         // utility functions
@@ -312,7 +315,8 @@ class NetworkLayer : public MicroBitComponent {
             MicroBit* uBit,
             uint16_t network_id,
             SerialCom* serial,
-            bool sink_mode = false
+            bool sink_mode = false,
+            bool debug = false
         );
         
         void init();

@@ -5,7 +5,7 @@
 
 MicroBit uBit;
 SerialCom serial(&uBit);
-NetworkLayer nl(&uBit, NETWORK_ID, &serial, true);
+NetworkLayer nl(&uBit, NETWORK_ID, &serial, true, true);
 
 uint32_t node_address = 0;
 
@@ -14,6 +14,7 @@ void recv(MicroBitEvent) {
 
     if(message_received == ManagedBuffer::EmptyPacket) return;
 
+    serial.send(100, 2, message_received);
     uBit.display.print(message_received.toManagedString());
 }
 

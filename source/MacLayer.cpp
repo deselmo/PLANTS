@@ -17,7 +17,7 @@ void MacLayer::init(){
     uBit->messageBus.listen(MICROBIT_ID_RADIO, MICROBIT_RADIO_EVT_DATAGRAM, this, &MacLayer::recv_from_radio);
     fiber_add_idle_component(this);
 
-    if(serial != NULL) serial->send(MAC_LAYER, 2, "initiated");
+    if(serial != NULL) serial->send(MAC_LAYER, 1, "initiated");
 }
 
 
@@ -235,7 +235,7 @@ void MacLayer::send_to_radio(MicroBitEvent){
  * 
  */
 void MacLayer::recv_from_radio(MicroBitEvent){
-    if(serial != NULL) serial->send(MAC_LAYER, 2, "something recv");
+    if(serial != NULL) serial->send(MAC_LAYER, 1, "something recv");
     
     PacketBuffer packet = uBit->radio.datagram.recv();
     uint8_t *payload = packet.getBytes();
@@ -314,7 +314,7 @@ bool compare_mac_buffers(const MacBuffer * first, const MacBuffer * second){
 }
 
 void MacLayer::addToDataReady(FragmentedPacket *buf){
-    if(serial != NULL) serial->send(MAC_LAYER, 2, "start addToDataReady");
+    if(serial != NULL) serial->send(MAC_LAYER, 1, "start addToDataReady");
     ManagedBuffer p(buf->length);
     uint8_t *bytes = p.getBytes();
     int len = 0;
@@ -328,12 +328,12 @@ void MacLayer::addToDataReady(FragmentedPacket *buf){
         delete *it;
     }
     inBuffer.insert(inBuffer.begin(), p);
-    if(serial != NULL) serial->send(MAC_LAYER, 2, "MAC_LAYER_PACKET_RECEIVED");
+    if(serial != NULL) serial->send(MAC_LAYER, 1, "MAC_LAYER_PACKET_RECEIVED");
     MicroBitEvent evt(MAC_LAYER, MAC_LAYER_PACKET_RECEIVED);
 }
 
 void MacLayer::addToFragmented(MacBuffer *fragment){
-    if(serial != NULL) serial->send(MAC_LAYER, 2, "start addToFragmented");
+    if(serial != NULL) serial->send(MAC_LAYER, 1, "start addToFragmented");
     if(receive_buffer[fragment->source] == NULL)
     {
         macbufferfragmentedreceived++;
@@ -343,7 +343,7 @@ void MacLayer::addToFragmented(MacBuffer *fragment){
     MacBufferFragmentReceived *received_fragment = receive_buffer[fragment->source];
     if(received_fragment->fragmented[fragment->seq_number] == NULL)
     {
-        if(serial != NULL) serial->send(MAC_LAYER, 2, "received_fragment->fragmented[fragment->seq_number] == NULL");
+        if(serial != NULL) serial->send(MAC_LAYER, 1, "received_fragment->fragmented[fragment->seq_number] == NULL");
         fragmentedpacket++;
         FragmentedPacket *tmp = new FragmentedPacket;
         tmp->lastReceived = false;
@@ -362,14 +362,14 @@ void MacLayer::addToFragmented(MacBuffer *fragment){
     }
     fragments->length += getLength(fragment->control);
 
-    if(serial != NULL) serial->send(MAC_LAYER, 2, "before fragments->lastReceived");
+    if(serial != NULL) serial->send(MAC_LAYER, 1, "before fragments->lastReceived");
     if(fragments->lastReceived)
     {
-        if(serial != NULL) serial->send(MAC_LAYER, 2, "fragments->lastReceived");
+        if(serial != NULL) serial->send(MAC_LAYER, 1, "fragments->lastReceived");
 
         if((fragments->packets.size() == 1 && fragments->packet_number == 0) || fragments->packets.size() == fragments->packet_number)
         {
-            if(serial != NULL) serial->send(MAC_LAYER, 2, "fragments->packets.size() == fragments->packet_number");
+            if(serial != NULL) serial->send(MAC_LAYER, 1, "fragments->packets.size() == fragments->packet_number");
             received_fragment->fragmented.erase(fragment->seq_number);
             std::sort(fragments->packets.begin(),fragments->packets.end(),compare_mac_buffers);
             addToDataReady(fragments);

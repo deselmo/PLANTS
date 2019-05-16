@@ -100,8 +100,8 @@ void SerialCom::recv_payload(MicroBitEvent e){
     
 }
 
-void SerialCom::init(){
-    uBit->serial.baud(9600);
+void SerialCom::test_init(){
+    uBit->serial.baud(115200);
     uBit->messageBus.listen(SERIAL_ID, SERIAL_DATA_READY, this, &SerialCom::send_to_serial);
     state = 0;
     read = 0;
@@ -111,8 +111,8 @@ void SerialCom::init(){
 }
 
 
-void SerialCom::test_init(){
-    uBit->serial.baud(9600);
+void SerialCom::init(){
+    uBit->serial.baud(115200);
     uBit->messageBus.listen(SERIAL_ID, SERIAL_DATA_READY, this, &SerialCom::send_to_serial);
     uBit->messageBus.listen(SERIAL_ID, RECV_FIRST_BYTE, this, &SerialCom::recv_first_byte);
     uBit->messageBus.listen(SERIAL_ID, RECV_SECOND_BYTE, this, &SerialCom::recv_second_byte);
@@ -157,7 +157,7 @@ void SerialCom::send(ManagedBuffer buf){
 
 void SerialCom::send_to_serial(MicroBitEvent e){
     ManagedBuffer toSend(out.front());
-    sent += uBit->serial.send(toSend.getBytes()+sent, toSend.length() - sent);
+    sent += uBit->serial.send(toSend.getBytes()+sent, toSend.length() - sent, ASYNC);
     if(sent == toSend.length())
     {
         out.pop();
