@@ -216,6 +216,8 @@ class ManagedBuffer
     ManagedBuffer(const char* str);
 
     ManagedBuffer(ManagedString);
+
+    ManagedString toManagedString();
 };
 
 #endif

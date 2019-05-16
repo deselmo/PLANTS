@@ -272,3 +272,12 @@ ManagedBuffer::ManagedBuffer(ManagedString managed_string) {
       this->setByte(i, managed_string.charAt(i));
     }
 }
+
+ManagedString ManagedBuffer::toManagedString() {
+    char s[this->length() + 1];
+
+    strncpy(s, (char*) this->getBytes(), this->length());
+    s[this->length()] = '\0';
+
+    return ManagedString(s);
+}
