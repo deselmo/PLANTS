@@ -1,28 +1,22 @@
 #include "NetworkLayer.h"
-
+#include <inttypes.h>
 
 // DDPacket {
-    DDPacket DDPacket::Empty = DDPacket {
-        .type       = (DDType) 0,
-        .source     = 0,
-        .network_id = 0,
-        .forward    = 0,
-        .origin     = 0,
-        .length     = 0,
-        .payload    = ManagedBuffer(1)
-    };
+    DDPacket DDPacket::Empty = DDPacket {};
 
     DDPacket DDPacket::of(
         NetworkLayer* network_layer,
         DDPacketData  dd_packet_data
     ) {
         return DDPacket {
-            .type = dd_packet_data.type,
-            .source = network_layer->get_source(),
-            .network_id = network_layer->get_network_id(),
-            .forward = dd_packet_data.forward,
-            .origin = dd_packet_data.origin,
-            .length = dd_packet_data.payload.length(),
+            .header = {
+                .type = dd_packet_data.type,
+                .source = network_layer->get_source(),
+                .network_id = network_layer->get_network_id(),
+                .forward = dd_packet_data.forward,
+                .origin = dd_packet_data.origin,
+                .length = dd_packet_data.payload.length(),
+            },
             .payload = dd_packet_data.payload
         };
     }
@@ -30,23 +24,18 @@
 
     // extractor methods
     bool DDPacket::extractRT_INIT(uint64_t& broadcast_counter) {
-        if (this->type != DD_RT_INIT ||
+        if (this->header.type != DD_RT_INIT ||
             this->payload.length() != sizeof(uint64_t)
         ) {
             return false;
         }
-
-        memcpy(
-            &broadcast_counter,
-            this->payload.getBytes(),
-            sizeof(uint64_t)
-        );
+        broadcast_counter = * (uint64_t*) this->payload.getBytes();
 
         return true;
     }
 
     bool DDPacket::extractRT_ACK(DDNodeRoute& node_route, uint64_t& broadcast_counter) {
-        if (this->type != DD_RT_ACK) {
+        if (this->header.type != DD_RT_ACK) {
             return false;
         }
 
@@ -56,12 +45,7 @@
         if(payload_with_node_route.payload.length() != sizeof(uint64_t)) {
             return false;
         }
-
-        memcpy(
-            &broadcast_counter,
-            this->payload.getBytes(),
-            sizeof(uint64_t)
-        );
+        broadcast_counter = * (uint64_t*) payload_with_node_route.payload.getBytes();
 
         node_route = payload_with_node_route.node_route;
 
@@ -69,7 +53,7 @@
     }
 
     bool DDPacket::extractCOMMAND(DDNodeRoute& node_rotue, ManagedBuffer& payload) {
-        if (this->type != DD_COMMAND) {
+        if (this->header.type != DD_COMMAND) {
             return false;
         }
 
@@ -88,35 +72,34 @@
     }
     
     bool DDPacket::extractLEAVE(uint32_t& address, uint64_t& broadcast_number) {
-        if (this->type != DD_LEAVE ||
+        if (this->header.type != DD_LEAVE ||
             this->payload.length() != sizeof(uint32_t) + sizeof(uint64_t)
         ) {
             return false;
         }
 
         uint64_t offset = 0;
-        memcpy(
-            &address,
-            this->payload.getBytes(),
-            offset += sizeof(uint32_t)
-        );
-        memcpy(
-            &broadcast_number,
-            this->payload.getBytes() + offset,
-            sizeof(uint64_t)
-        );
+        uint64_t length = 0;
+
+        length = sizeof(uint32_t);
+        address = * (uint32_t*) this->payload.getBytes() + offset;
+        offset += length;
+
+        length = sizeof(uint64_t);
+        broadcast_number = * (uint64_t*) this->payload.getBytes() + offset;
+        offset += length;
 
         return true;
     }
 
 
     bool DDPacket::operator==(const DDPacket& other) {
-        return this->type       == other.type       &&
-               this->source     == other.source     &&
-               this->network_id == other.network_id &&
-               this->forward    == other.forward    &&
-               this->origin     == other.origin     &&
-               this->length     == other.length     &&
+        return this->header.type       == other.header.type       &&
+               this->header.source     == other.header.source     &&
+               this->header.network_id == other.header.network_id &&
+               this->header.forward    == other.header.forward    &&
+               this->header.origin     == other.header.origin     &&
+               this->header.length     == other.header.length     &&
                this->payload    == other.payload;
     }
     bool DDPacket::operator!=(const DDPacket& other) {
@@ -131,39 +114,43 @@
         if(*this==DDPacket::Empty)
             return ManagedBuffer::EmptyPacket;
 
-        ManagedBuffer packet(sizeof(DDPacket) + this->payload.length());
+        ManagedBuffer packet(sizeof(DDPacketHeader) + this->payload.length());
 
         uint64_t offset = 0;
+        uint64_t length = 0;
+
+        length = sizeof(this->header);
         memcpy(
-            packet.getBytes(),
-            this,
-            offset += sizeof(DDPacket)
-        );
+            packet.getBytes() + offset,
+            &this->header,
+            length); offset += length;
+
+        length = this->payload.length();
         memcpy(
             packet.getBytes() + offset,
             this->payload.getBytes(),
-            this->payload.length()
-        );
+            length); offset += length;
 
         return packet;
     }
     DDPacket DDPacket::fromManagedBuffer(ManagedBuffer packet) {
-        if(packet.length() < sizeof(DDPacket))
-            return DDPacket::Empty;
-
         DDPacket dd_packet;
 
         uint64_t offset = 0;
-        memcpy(
-            (void*) &dd_packet,
-            (void*) packet.getBytes(),
-            offset += sizeof(DDPacket)
-        );
+        uint64_t length = 0;
 
+        length = sizeof(dd_packet.header);
+        memcpy(
+            &dd_packet.header,
+            packet.getBytes() + offset,
+            length); offset += length;
+
+
+        length = dd_packet.header.length;
+        if(packet.length() < offset + length) return DDPacket::Empty;
         dd_packet.payload = ManagedBuffer(
             packet.getBytes() + offset,
-            dd_packet.length
-        );
+            length); offset += length;
 
         return dd_packet;
     }
@@ -171,10 +158,7 @@
 
 
 // DDNodeRoute {
-    DDNodeRoute DDNodeRoute::Empty = DDNodeRoute {
-        .size      = 0,
-        .addresses = ManagedBuffer(1)
-    };
+    DDNodeRoute DDNodeRoute::Empty = DDNodeRoute {};
 
 
     // factory functions
@@ -205,27 +189,31 @@
 
 
     void DDNodeRoute::push(uint32_t node_address) {
-        this->size++;
-        ManagedBuffer nodes(this->addresses.length() + sizeof(uint32_t));
+        ManagedBuffer new_addresses(sizeof(node_address) + this->addresses.length());
 
         uint64_t offset = 0;
+        uint64_t length = 0;
+
+        length = sizeof(node_address);
         memcpy(
-            addresses.getBytes(),
+            new_addresses.getBytes() + offset,
             &node_address,
-            offset += sizeof(uint32_t)
-        );
+            length); offset += length;
+
+        length = this->addresses.length();
         memcpy(
-            addresses.getBytes() + offset,
+            new_addresses.getBytes() + offset,
             this->addresses.getBytes(),
-            this->addresses.length()
-        );
+            length); offset += length;
+
+        this->size++;
         this->addresses = addresses;
     }
     uint32_t DDNodeRoute::take() {
         if(!(this->size > 0))
             return 0;
 
-        uint32_t node_address = *(this->addresses.getBytes());
+        uint32_t node_address = *(uint32_t*)(this->addresses.getBytes());
 
         this->size--;
         this->addresses = ManagedBuffer(
@@ -253,48 +241,52 @@
     }
 
     ManagedBuffer DDNodeRoute::toManagedBuffer() {
-        if(*this == DDNodeRoute::Empty) {
+        if(*this == DDNodeRoute::Empty ||
+           this->addresses.length() != this->size * sizeof(uint32_t)) {
             return ManagedBuffer::EmptyPacket;
         }
 
         ManagedBuffer packet(
-            sizeof(DDNodeRoute) +
+            sizeof(this->size) +
             this->addresses.length()
         );
 
         uint8_t *buffer = packet.getBytes();
 
         uint64_t offset = 0;
+        uint64_t length = 0;
+
+        length = sizeof(this->size);
         memcpy(
-            buffer,
-            this,
-            offset += sizeof(DDNodeRoute)
-        );
+            buffer + offset,
+            &this->size,
+            length); offset += length;
+
+        length = this->addresses.length();
         memcpy(
             buffer + offset,
             this->addresses.getBytes(),
-            this->addresses.length()
-        );
+            length); offset += length;
 
         return packet;
     }
     DDNodeRoute DDNodeRoute::fromManagedBuffer(ManagedBuffer packet) {
-        if(packet.length() < sizeof(DDNodeRoute))
-            return DDNodeRoute::Empty;
-
         DDNodeRoute node_route;
 
         uint64_t offset = 0;
-        memcpy(
-            (void*) &node_route,
-            (void*) packet.getBytes(),
-            offset += sizeof(DDNodeRoute)
-        );
+        uint64_t length = 0;
 
+        length = sizeof(node_route.size);
+        memcpy(
+            &node_route.size,
+            packet.getBytes(),
+            length); offset += length;
+
+        length = node_route.size * sizeof(uint32_t);
+        if(packet.length() < offset + length) return DDNodeRoute::Empty;
         node_route.addresses = ManagedBuffer(
             packet.getBytes() + offset,
-            node_route.size * sizeof(uint32_t)
-        );
+            length); offset += length;
 
         return node_route;
     }
@@ -302,11 +294,7 @@
 
 
 // DDPayloadWithNodeRoute {
-    DDPayloadWithNodeRoute DDPayloadWithNodeRoute::Empty = DDPayloadWithNodeRoute {
-        .node_route = DDNodeRoute::Empty,
-        .length     = 0,
-        .payload    = ManagedBuffer(1)
-    };
+    DDPayloadWithNodeRoute DDPayloadWithNodeRoute::Empty = DDPayloadWithNodeRoute {};
 
 
     DDPayloadWithNodeRoute DDPayloadWithNodeRoute::of(
@@ -336,61 +324,97 @@
 
     ManagedBuffer DDPayloadWithNodeRoute::toManagedBuffer() {
         if(*this == DDPayloadWithNodeRoute::Empty)
-            return ManagedBuffer::EmptyPacket;
+            return ManagedBuffer::EmptyPacket;;
 
         ManagedBuffer packet(
-            sizeof(DDPayloadWithNodeRoute) +
+            sizeof(this->node_route.size) +
             this->node_route.addresses.length() +
+            sizeof(this->length) +
             this->payload.length()
         );
 
         uint8_t *buffer = packet.getBytes();
 
         uint64_t offset = 0;
+        uint64_t length = 0;
+
+        length = sizeof(this->node_route.size);
         memcpy(
-            buffer,
-            this,
-            offset += sizeof(DDPayloadWithNodeRoute)
-        );
+            buffer + offset,
+            &node_route.size,
+            length); offset += length;
+
+        length = this->node_route.addresses.length();
         memcpy(
             buffer + offset,
             this->node_route.addresses.getBytes(),
-            this->node_route.addresses.length()
-        );
-        offset += this->node_route.addresses.length();
+            length); offset += length;
+
+        length = sizeof(this->length);
+        memcpy(
+            buffer + offset,
+            &this->length,
+            length); offset += length;
+
+        length = this->payload.length();
         memcpy(
             buffer + offset,
             this->payload.getBytes(),
-            this->payload.length()
-        );
+            length); offset += length;
 
         return packet;
     }
     DDPayloadWithNodeRoute DDPayloadWithNodeRoute::fromManagedBuffer(ManagedBuffer packet) {
-        if(packet.length() < sizeof(DDPayloadWithNodeRoute))
-            return DDPayloadWithNodeRoute::Empty;
-
         DDPayloadWithNodeRoute payload_with_node_route;
 
         uint64_t offset = 0;
-        memcpy(
-            (void*) &payload_with_node_route,
-            (void*) packet.getBytes(),
-            offset += sizeof(DDPayloadWithNodeRoute)
-        );
+        uint64_t length = 0;
 
+        length = sizeof(payload_with_node_route.node_route.size);
+        if(packet.length() < offset + length) return DDPayloadWithNodeRoute::Empty;
+        memcpy(
+            &payload_with_node_route.node_route.size,
+            packet.getBytes() + offset,
+            length); offset += length;
+
+        length = payload_with_node_route.node_route.size * sizeof(uint32_t);
+        if(packet.length() < offset + length) return DDPayloadWithNodeRoute::Empty;
         payload_with_node_route.node_route.addresses = ManagedBuffer(
             packet.getBytes() + offset,
-            payload_with_node_route.node_route.size * sizeof(uint32_t)
-        );
-        offset += payload_with_node_route.node_route.size * sizeof(uint32_t);
+            length); offset += length;
 
+        length = sizeof(payload_with_node_route.length);
+        if(packet.length() < offset + length) return DDPayloadWithNodeRoute::Empty;
+        memcpy(
+            &payload_with_node_route.length,
+            packet.getBytes() + offset,
+            length); offset += length;
+
+        length = payload_with_node_route.length;
+        if(packet.length() < offset + length) return DDPayloadWithNodeRoute::Empty;
         payload_with_node_route.payload = ManagedBuffer(
             packet.getBytes() + offset,
-            payload_with_node_route.length
-        );
+            length); offset += length;
 
         return payload_with_node_route;
+    }
+// }
+
+// DDNodeConnection {
+    DDNodeConnection DDNodeConnection::Empty = DDNodeConnection {};
+
+    bool DDNodeConnection::operator==(const DDNodeConnection& other) {
+        return  this->status            == other.status &&
+                this->address           == other.address &&
+                this->broadcast_counter == other.broadcast_counter;
+    }
+
+    bool DDNodeConnection::operator!=(const DDNodeConnection& other) {
+        return !(*this==other);
+    }
+
+    bool DDNodeConnection::isEmpty() {
+        return *this == DDNodeConnection::Empty;
     }
 // }
 
@@ -435,9 +459,12 @@
             this, &NetworkLayer::packet_timeout
         );
 
-        if(this->sink_mode || this->serial) {
-            this->get_store_broadcast_counter();
 
+        if(this->sink_mode) {
+            this->get_store_broadcast_counter();
+        }
+
+        if(this->serial) {
             this->serial->addListener(
                 NETWORK_LAYER_INTERNALS,
                 NETWORK_LAYER_SERIAL_ROUTING_TABLE,
@@ -464,19 +491,16 @@
 
         if(this->sink_mode) {
             if(this->elapsed_from_last_operation(NETWORK_LAYER_DD_RT_INIT_INTERVAL)) {
-                this->serial_send_debug("timeout: send initialing new rt_init");
-
                 this->incr_broadcast_counter();
             }
         } else if(!this->rt_formed &&
                 this->elapsed_from_last_operation(NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL)
         ) {
-            this->serial_send_debug("timeout: send join request");
             this->send_join_request();
         }
 
         if(this->send_state == DD_READY_TO_SEND && this->outBufferPackets.size()) {
-            switch(this->outBufferPackets.front().type) {
+            switch(this->outBufferPackets.front().header.type) {
                 case DD_DATA:
                 case DD_RT_ACK:
                 case DD_LEAVE:
@@ -503,17 +527,24 @@
     }
 
 
-    void NetworkLayer::send(ManagedBuffer payload) {
+    bool NetworkLayer::send(ManagedBuffer payload) {
+        if(this->sink_mode || !this->rely) return false;
+        
         this->send_data(payload);
+        return true;
     }
 
-    void NetworkLayer::send(ManagedBuffer payload, uint32_t destination) {
-        DDNodeRoute node_route;
+    bool NetworkLayer::send(ManagedBuffer payload, uint32_t destination) {
+        if(!this->sink_mode) return false;
 
-        this->serial_send_get_destination = destination;
         this->serial_send_get_payload = payload;
 
         this->serial_get_node_route(destination);
+
+        this->serial_wait_route_found = true;
+        while(this->serial_wait_route_found) { this->uBit->sleep(50); }
+
+        return this->serial_route_found;
     }
 
 
@@ -528,15 +559,17 @@
     ManagedBuffer NetworkLayer::recv() {
         if(inBufferPackets.empty())
             return ManagedBuffer::EmptyPacket;
-        else {
-            ManagedBuffer p = inBufferPackets.front();
-            inBufferPackets.pop();
-            return p;
-        }
+
+        ManagedBuffer packet = inBufferPackets.front();
+        inBufferPackets.pop();
+        return packet;
     }
 
-    std::tuple<bool, uint32_t, uint64_t> NetworkLayer::recv_node() {
-        tuple<bool, uint32_t, uint64_t> connected_node = inBufferNodes.front();
+    DDNodeConnection NetworkLayer::recv_node() {
+        if(inBufferNodes.empty())
+            return DDNodeConnection::Empty;
+
+        DDNodeConnection connected_node = inBufferNodes.front();
         inBufferNodes.pop();
 
         return connected_node;
@@ -554,40 +587,46 @@
         }
 
         if(this->sink_mode) {
-            switch(dd_packet.type) {
+            switch(dd_packet.header.type) {
                 case DD_RT_INIT: {
+                    this->serial_send_debug("recv_from_mac: DD_RT_INIT");
                     return;
                 } break;
 
                 case DD_DATA: {
+                    this->serial_send_debug("recv_from_mac: DD_DATA");
                     this->inBufferPackets.push(dd_packet.payload);
                     MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_PACKET_RECEIVED); 
 
                 } break;
 
                 case DD_COMMAND: {
+                    this->serial_send_debug("recv_from_mac: DD_COMMAND");
                     return;
                 } break;
 
                 case DD_RT_ACK: {
+                    this->serial_send_debug("recv_from_mac: DD_RT_ACK");
                     DDNodeRoute node_route;
                     uint64_t broadcast_counter;
 
                     if(!dd_packet.extractRT_ACK(node_route, broadcast_counter) ||
-                    broadcast_counter != this->broadcast_counter) {
+                            broadcast_counter != this->broadcast_counter) {
                         return;
                     }
 
-                    this->serial_send_put_origin = dd_packet.origin;
+                    this->serial_send_put_origin = dd_packet.header.origin;
 
                     this->serial_put_node_route(node_route);
                 } break;
 
                 case DD_JOIN: {
+                    this->serial_send_debug("recv_from_mac: DD_JOIN");
                     this->send_rt_init();
                 } break;
 
                 case DD_LEAVE: {
+                    this->serial_send_debug("recv_from_mac: DD_LEAVE");
                     uint32_t disconnected_node_address;
                     uint64_t broadcast_counter;
 
@@ -596,18 +635,24 @@
                         return;
                     }
 
-                    this->inBufferNodes.push(tuple<bool, uint32_t, uint64_t>(
-                        false,
-                        disconnected_node_address,
-                        this->broadcast_counter
-                    ));
-                    MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_NODE_CONNECTED);
+                    this->inBufferNodes.push(DDNodeConnection {
+                        .status            = false,
+                        .address           = disconnected_node_address,
+                        .broadcast_counter = this->broadcast_counter
+                        
+                    });
+                    MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_NODE_CONNECTIONS);
+                } break;
+
+                default: {
+                    this->serial_send_debug("recv_from_mac: WHAT?");
                 } break;
             }
         }
         else {
-            switch(dd_packet.type) {
+            switch(dd_packet.header.type) {
                 case DD_RT_INIT: {
+                    this->serial_send_debug("recv_from_mac: DD_RT_INIT");
                     uint64_t broadcast_counter_received;
 
                     if (!dd_packet.extractRT_INIT(broadcast_counter_received) ||
@@ -615,7 +660,7 @@
                         return;
                     }
 
-                    this->rt_connect(broadcast_counter_received, dd_packet.source);
+                    this->rt_connect(broadcast_counter_received, dd_packet.header.source);
 
                     this->send_rt_ack();
 
@@ -623,8 +668,9 @@
                 } break;
 
                 case DD_DATA: {
+                    this->serial_send_debug("recv_from_mac: DD_DATA");
                     if(this->rt_formed) {
-                        this->send_data(dd_packet.payload, dd_packet.origin);
+                        this->send_data(dd_packet.payload, dd_packet.header.origin);
                     }
                 } break;
 
@@ -637,8 +683,8 @@
                     }
 
                     if(node_route.size == 0) {
-                        // I am the destination
-                        this->inBufferPackets.push(dd_packet.payload);
+                        // I am the destination, the packet is for me
+                        this->inBufferPackets.push(payload);
                         MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_PACKET_RECEIVED); 
 
 
@@ -650,13 +696,14 @@
                             node_route,
                             payload,
                             destination,
-                            dd_packet.origin
+                            dd_packet.header.origin
                         );
                     }
 
                 } break;
 
                 case DD_RT_ACK: {
+                    this->serial_send_debug("recv_from_mac: DD_RT_ACK");
                     DDNodeRoute node_route;
                     uint64_t broadcast_counter;
 
@@ -667,14 +714,16 @@
 
                     node_route.push(this->source);
 
-                    this->send_rt_ack(node_route, dd_packet.origin);
+                    this->send_rt_ack(node_route, dd_packet.header.origin);
                 } break;
 
                 case DD_JOIN: {
+                    this->serial_send_debug("recv_from_mac: DD_JOIN");
                     this->send_rt_init();
                 } break;
 
                 case DD_LEAVE: {
+                    this->serial_send_debug("recv_from_mac: DD_LEAVE");
                     if(!this->rt_formed) {
                         return;
                     }
@@ -687,7 +736,11 @@
                         return;
                     }
 
-                    this->send_leave(dd_packet.payload, dd_packet.origin);
+                    this->send_leave(dd_packet.payload, dd_packet.header.origin);
+                } break;
+
+                default: {
+                    this->serial_send_debug("recv_from_mac: WHAT?");
                 } break;
             }
         }
@@ -696,12 +749,31 @@
     void NetworkLayer::send_to_mac(MicroBitEvent) {
         DDPacket dd_packet = this->outBufferPackets.front();
         this->outBufferPackets.pop();
-        this->sending_to = dd_packet.forward;
+        this->sending_to = dd_packet.header.forward;
 
         ManagedBuffer packet = dd_packet.toManagedBuffer();
-        this->serial_send_debug("mac sending..");
-        this->mac_layer.send(packet.getBytes(), packet.length(), dd_packet.forward);
-        this->serial_send_debug("mac sended");
+        switch(dd_packet.header.type) {
+            case DD_RT_INIT:
+                this->serial_send_debug("send via mac: DD_RT_INIT");
+                break;
+            case DD_DATA:
+                this->serial_send_debug("send via mac: DD_DATA");
+                break;
+            case DD_COMMAND:
+                this->serial_send_debug("send via mac: DD_COMMAND");
+                break;
+            case DD_RT_ACK:
+                this->serial_send_debug("send via mac: DD_RT_ACK"); break;
+            case DD_JOIN:
+                this->serial_send_debug("send via mac: DD_JOIN");
+                break;
+            case DD_LEAVE:
+                this->serial_send_debug("send via mac: DD_LEAVE");
+                break;
+            default:
+                this->serial_send_debug("send via mac: WHAT?");
+        }
+        this->mac_layer.send(packet.getBytes(), packet.length(), dd_packet.header.forward);
 
         if(this->send_state == DD_WAIT_TO_BROADCAST) {
             this->send_state = DD_READY_TO_SEND;
@@ -745,11 +817,10 @@
     void NetworkLayer::recv_from_serial(ManagedBuffer serial_received_buffer) {
         uint8_t code = serial_received_buffer.getByte(0);
 
-        this->serial_send_debug("received message from serial");
-        this->serial_send_debug( serial_received_buffer);
-
         if(code == DD_SERIAL_INIT) {
             uint8_t mode = DD_SERIAL_INIT_ACK;
+
+            this->serial_send_debug("init");
 
             this->serial->send(
                 NETWORK_LAYER_INTERNALS,
@@ -768,58 +839,61 @@
         }
         
         else {
-            this->serial_send_debug("managing received message..");
             switch(this->serial_send_state) {
                 case DD_SERIAL_SEND_NONE:
-                    this->serial_send_debug("   NONE");
                     return;
 
                 case DD_SERIAL_SEND_CLEAR:
-                    this->serial_send_debug("   CLEAR");
-
                     this->send_rt_init();
 
                     break;
 
                 case DD_SERIAL_SEND_GET: {
-                    this->serial_send_debug("   GET");
-
                     DDNodeRoute node_route;
 
                     if(serial_received_buffer == ManagedBuffer::EmptyPacket) {
-                        MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_SEND_COMMAND_FAIL);
+                        this->serial_route_found = false;
                     }
 
-                    node_route = DDNodeRoute {
-                        .size = serial_received_buffer.length() / sizeof(uint32_t),
-                        .addresses = serial_received_buffer
-                    };
+                    else {
+                        bool serial_route_found = *serial_received_buffer.getBytes();
 
-                    this->send_command(
-                        this->serial_send_get_payload,
-                        node_route,
-                        this->serial_send_get_destination
-                    );
+                        DDNodeRoute node_route = DDNodeRoute {
+                            .size = (serial_received_buffer.length()-1) / sizeof(uint32_t),
+                            .addresses = ManagedBuffer(
+                                serial_received_buffer.getBytes()+1,
+                                (serial_received_buffer.length()-1)
+                            )
+                        };
 
-                    MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_SEND_COMMAND_OK);
+                        uint32_t destination = node_route.take();
+
+                        this->send_command(
+                            this->serial_send_get_payload,
+                            node_route,
+                            destination
+                        );
+
+                        this->serial_route_found = true;
+                    }
+
+                    this->serial_wait_route_found = false;
 
                 } break;
 
                 case DD_SERIAL_SEND_PUT:
-                    this->serial_send_debug("   PUT");
+                    this->inBufferNodes.push(DDNodeConnection {
+                        .status            = true,
+                        .address           = this->serial_send_put_origin,
+                        .broadcast_counter = broadcast_counter
+                    });
 
-                    this->inBufferNodes.push(std::tuple<bool, uint32_t, uint64_t>(
-                        true,
-                        this->serial_send_put_origin,
-                        broadcast_counter
-                    ));
-                    MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_NODE_CONNECTED);
+                    MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_NODE_CONNECTIONS);
 
                     break;
             }
             
-            this->serial_send_state = DD_SERIAL_SEND_NONE;
-            
+            this->serial_send_state = DD_SERIAL_SEND_NONE;            
         }
     }
 
@@ -840,10 +914,13 @@
     void NetworkLayer::rt_disconnect() {
         this->rt_formed = false;
         this->rely = 0;
+        if (this->broadcast_counter > 0) this->broadcast_counter--;
 
         std::queue<DDPacket> emptyOutBufferPackets;
 
         std::swap(this->outBufferPackets, emptyOutBufferPackets);
+
+        this->uBit->display.print("N");
 
         MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_RT_BROKEN);
     }
@@ -853,7 +930,9 @@
         this->rely = rely;
         this->rt_formed = true;
 
-        MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_INIT);
+        this->uBit->display.print("C");
+
+        MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_RT_INIT);
     }
 
     void NetworkLayer::incr_broadcast_counter() {
@@ -866,7 +945,7 @@
         KeyValuePair* stored_broadcast_counter = this->uBit->storage.get("bc");
 
         if(stored_broadcast_counter == NULL) {
-            this->broadcast_counter = 0;
+            this->broadcast_counter = 1;
         } else {
             uint64_t broadcast_counter;
 
@@ -888,6 +967,8 @@
         );
     }
 
+
+    // serial comunication
     void NetworkLayer::serial_wait_init() {
         while(!this->serial_initiated) {
             this->uBit->sleep(100);
@@ -897,9 +978,6 @@
     void NetworkLayer::serial_send(ManagedBuffer packet) {
         this->serial_in_sending_buffer = packet;
 
-        this->serial_send_debug("serial sending");
-        this->serial_send_debug(packet);
-
         this->serial->send(
             NETWORK_LAYER_INTERNALS,
             NETWORK_LAYER_SERIAL_ROUTING_TABLE,
@@ -907,28 +985,29 @@
         );
     }
 
-
     void NetworkLayer::serial_send_debug(ManagedBuffer message) {
         if(this->serial != NULL)
             this->serial->send(101, 1, message);
     }
- 
 
     void NetworkLayer::serial_get_node_route(uint32_t destination) {
         uint8_t mode = DD_SERIAL_GET;
         ManagedBuffer packet(sizeof(mode) + sizeof(destination));
 
         uint64_t offset = 0;
+        uint64_t length = 0;
+
+        length = sizeof(mode);
         memcpy(
-            packet.getBytes(),
+            packet.getBytes() + offset,
             &mode,
-            offset += sizeof(mode)
-        );
+            length); offset += length;
+
+        length = sizeof(destination);
         memcpy(
             packet.getBytes() + offset,
             &destination,
-            sizeof(destination)
-        );
+            length); offset += length;
 
         this->serial_send_state = DD_SERIAL_SEND_GET;
         this->serial_send(packet);
@@ -939,16 +1018,19 @@
         ManagedBuffer packet(sizeof(mode) + node_route.addresses.length());
 
         uint64_t offset = 0;
+        uint64_t length = 0;
+
+        length = sizeof(mode);
         memcpy(
             packet.getBytes(),
             &mode,
-            offset += sizeof(mode)
-        );
+            length); offset += length;
+
+        length = node_route.addresses.length();
         memcpy(
             packet.getBytes() + offset,
             node_route.addresses.getBytes(),
-            node_route.addresses.length()
-        );
+            length); offset += length;
 
         this->serial_send_state = DD_SERIAL_SEND_PUT;
         this->serial_send(packet);
@@ -982,7 +1064,6 @@
     }
 
     void NetworkLayer::send_rt_init() {
-        this->serial_send_debug("pushing oin queue..");
         this->outBufferPackets.push(
             DDPacket::of (
                 this,
@@ -996,7 +1077,6 @@
                 }
             )
         );
-        this->serial_send_debug("pushed");
     }
 
     void NetworkLayer::send_rt_ack() {
@@ -1079,17 +1159,19 @@
         );
 
         uint64_t offset = 0;
+        uint64_t length = 0;
+
+        length = sizeof(this->sending_to);
         memcpy(
-            payload.getBytes(),
+            payload.getBytes() + offset,
             (uint8_t*) &this->sending_to,
-            sizeof(this->sending_to)
-        );
-        offset += sizeof(this->sending_to);
+            length); offset += length;
+
+        length = sizeof(this->broadcast_counter);
         memcpy(
             payload.getBytes() + offset,
             (uint8_t*) &this->broadcast_counter,
-            sizeof(this->broadcast_counter)
-        );
+            length); offset += length;
 
         this->send_leave(payload, this->source);
     }

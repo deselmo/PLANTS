@@ -1,35 +1,56 @@
 #ifndef NETWORK_LAYER_H
 #define NETWORK_LAYER_H
 
-#include <map>
-#include <queue>
-
 #include "MicroBit.h"
 #include "MacLayer.h"
 #include "ManagedBuffer.h"
 #include "SerialCom.h"
 
-#define NETWORK_LAYER 43
-#define NETWORK_LAYER_INTERNALS 44
+#define NETWORK_LAYER 130
+#define NETWORK_LAYER_INTERNALS 131
 
 #define NETWORK_BROADCAST 0
-#define NETWORK_LAYER_DD_RT_INIT_INTERVAL      6000 // 1 minute
-#define NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL 1000  // 1 second
+#define NETWORK_LAYER_DD_RT_INIT_INTERVAL      300000 // 5 minute
+#define NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL 5000  // 5 second
 
+
+// PUBLIC EVENTS
 enum {
-    // External events
-    NETWORK_LAYER_PACKET_RECEIVED,
-    NETWORK_LAYER_INIT,
+    /**
+     * Event raised for sinks and nodes
+     * 
+     * Raised when a new packet is received:
+     * a sink receives a DD_DATA
+     * a node receives a DD_COMMAND
+     */
+    NETWORK_LAYER_PACKET_RECEIVED = 1,
+
+    /**
+     * Event raised for nodes
+     * 
+     * Raised when a node logically connects to a sink
+     */
+    NETWORK_LAYER_RT_INIT,
+
+    /**
+     * Event raised for nodes
+     * 
+     * Raised when a node logically loses connection with a sink
+     */
     NETWORK_LAYER_RT_BROKEN,
-    NETWORK_LAYER_NODE_CONNECTED,
-    NETWORK_LAYER_SEND_COMMAND_OK,
-    NETWORK_LAYER_SEND_COMMAND_FAIL,
+
+    /**
+     * Event raised for sinks
+     * 
+     * Raised when a node logically connects or loses connection to the sink
+     */
+    NETWORK_LAYER_NODE_CONNECTIONS,
 };
 
-    // Internal events
+// Private events, DO NOT USE
 enum {
-    NETWORK_LAYER_PACKET_READY_TO_SEND,
-    NETWORK_LAYER_SERIAL_ROUTING_TABLE = 1,
+    NETWORK_LAYER_PACKET_READY_TO_SEND = 1,
+    NETWORK_LAYER_SERIAL_ROUTING_TABLE = 2,
 };
 
 
@@ -67,11 +88,12 @@ enum DDSerialMode {
     DD_SERIAL_INIT_ACK  = 4,
 };
 
-
+struct DDPacketHeader;
 struct DDPacketData;
 struct DDPacket;
 struct DDNodeRoute;
 struct DDPayloadWithNodeRoute;
+struct DDNodeConnection;
 class  NetworkLayer;
 
 
@@ -82,14 +104,17 @@ struct DDPacketData {
     ManagedBuffer  payload;
 };
 
-
-struct DDPacket {
+struct DDPacketHeader {
     DDType   type;
     uint32_t source;
     uint16_t network_id;
     uint32_t forward;
     uint32_t origin;
     uint32_t length;
+};
+
+struct DDPacket {
+    DDPacketHeader header;
     ManagedBuffer  payload;
 
 
@@ -175,6 +200,19 @@ struct DDPayloadWithNodeRoute {
 };
 
 
+struct DDNodeConnection {
+    bool     status;
+    uint32_t address;
+    uint64_t broadcast_counter;
+
+    bool operator==(const DDNodeConnection&);
+    bool operator!=(const DDNodeConnection&);
+
+    static DDNodeConnection Empty;
+    bool isEmpty();
+};
+
+
 class NetworkLayer : public MicroBitComponent {
     MicroBit *uBit;
     MacLayer mac_layer;
@@ -186,7 +224,7 @@ class NetworkLayer : public MicroBitComponent {
     std::queue<ManagedBuffer> inBufferPackets;
 
     // Queue of new node connected with the respective broadcast number
-    std::queue<std::tuple<bool, uint32_t, uint64_t>> inBufferNodes;
+    std::queue<DDNodeConnection> inBufferNodes;
 
     const uint32_t network_id;
     const bool     sink_mode;
@@ -208,10 +246,11 @@ class NetworkLayer : public MicroBitComponent {
     // needed for the serial
     volatile bool serial_initiated = false;
     DDSerialSendState serial_send_state = DD_SERIAL_SEND_NONE;
-    uint32_t serial_send_get_destination = 0;
-    uint32_t serial_send_put_origin = 0;
     ManagedBuffer serial_send_get_payload;
+    uint32_t serial_send_put_origin = 0;
     ManagedBuffer serial_in_sending_buffer;
+    volatile bool serial_wait_route_found = false;
+    volatile bool serial_route_found = false;
 
 
     private:
@@ -281,18 +320,18 @@ class NetworkLayer : public MicroBitComponent {
         uint16_t get_network_id() { return this->network_id; };
         uint32_t get_source() { return this->source; };
 
-        // send to the rely
-        void send(ManagedBuffer);
+        // send to the rely, only for normal nodes
+        bool send(ManagedBuffer);
 
-        // if we know a path, only the sink
-        void send(ManagedBuffer, uint32_t destination);
+        // if we know a path, only sinks
+        bool send(ManagedBuffer, uint32_t destination);
 
         // interface provided to application layer
         ManagedBuffer recv();
 
         // interface provided to application layer
-        std::tuple<bool, uint32_t, uint64_t> recv_node();
-        
+        DDNodeConnection recv_node();
+
         virtual void idleTick();
 };
 
