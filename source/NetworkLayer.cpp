@@ -591,7 +591,7 @@
 
         DDPacket dd_packet = DDPacket::fromManagedBuffer(received_mac_buffer);
 
-        if(dd_packet.isEmpty()) {
+        if(dd_packet.header.network_id != this->network_id) {
             return;
         }
 
