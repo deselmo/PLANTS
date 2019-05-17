@@ -207,7 +207,7 @@
             length); offset += length;
 
         this->size++;
-        this->addresses = addresses;
+        this->addresses = new_addresses;
     }
     uint32_t DDNodeRoute::take() {
         if(!(this->size > 0))
