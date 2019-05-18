@@ -426,10 +426,15 @@
         uint16_t   network_id,
         SerialCom* serial,
         bool sink_mode,
+        int transmitPower,
         bool debug
     )
         : uBit                (uBit)
-        , mac_layer           (MacLayer(uBit, (debug) ? serial : NULL))
+        , mac_layer           (MacLayer(
+                                    uBit,
+                                    (debug) ? serial : NULL,
+                                    transmitPower)
+                                )
         , serial              (serial)
         , network_id          (network_id)
         , sink_mode           (sink_mode)

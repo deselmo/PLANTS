@@ -316,6 +316,7 @@ class NetworkLayer : public MicroBitComponent {
             uint16_t network_id,
             SerialCom* serial,
             bool sink_mode = false,
+            int transmitPower = 0,
             bool debug = false
         );
         
