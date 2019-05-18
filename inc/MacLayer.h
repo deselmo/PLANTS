@@ -248,7 +248,7 @@ public:
     int macbufferfragmentedreceived;
     int fragmentedpacket;
 
-    MacLayer(MicroBit* uBit, SerialCom* serial);
+    MacLayer(MicroBit* uBit, SerialCom* serial, int transmitPower = 6);
     void init();
 
     int send(uint8_t *buffer, int len, uint32_t dest);

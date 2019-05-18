@@ -4,10 +4,11 @@
 #include <algorithm>
 
 
-MacLayer::MacLayer(MicroBit* uBit, SerialCom* serial){
+MacLayer::MacLayer(MicroBit* uBit, SerialCom* serial, int transmitPower){
     seq_number = 248;
     this->uBit = uBit;
     this->serial = serial;
+    this->uBit->radio.setTransmitPower(transmitPower);
 }
 
 void MacLayer::init(){
