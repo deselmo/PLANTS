@@ -72,6 +72,7 @@ struct MacBuffer{
     bool queued;                                // is the packet queued for transmission
     uint64_t timestamp;                         // when the packet has been sent the last time
     uint8_t attempt;                            // number of time the packets has been sent 
+    uint8_t timewait;
 
     uint8_t type;                               // the type of the packet
     uint32_t destination;                       // the mac address of the destination of the packet

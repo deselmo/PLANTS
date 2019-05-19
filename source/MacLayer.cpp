@@ -104,6 +104,7 @@ MacBuffer *MacLayer::createMacBuffer(uint8_t type, uint32_t dest, int len, uint8
     buf->source = microbit_serial_number();
     buf->frag = frag;
     buf->seq_number = seq_number;
+    buf->timewait = 0;
     buf->control = setControl(len,inc);
     if(inc)
     {
@@ -155,6 +156,14 @@ vector<MacBuffer *> * MacLayer::prepareFragment(uint8_t *buffer, int len, uint32
  */
 void MacLayer::send_to_radio(MicroBitEvent){
     MacBuffer * toSend = outBuffer.back();
+    if(toSend->timewait > 0)
+    {
+        toSend->timewait--;
+        outBuffer.pop_back();
+        outBuffer.insert(outBuffer.begin(), toSend);
+        MicroBitEvent evt(MAC_LAYER, MAC_LAYER_PACKET_READY_TO_SEND);
+        return;
+    }
     PacketBuffer p(MICROBIT_RADIO_MAX_PACKET_SIZE);
     uint8_t *payload = p.getBytes();
     int tmp = sizeof(uint8_t);
@@ -511,6 +520,7 @@ void MacLayer::idleTick(){
         else if(it->second->attempt < MAC_LAYER_RETRANSMISSION_ATTEMPT)
         {
             it->second->queued = true;
+            it->second->timewait = uBit->random(it->second->attempt);
             if(outBuffer.empty())
             {
                 outBuffer.insert(outBuffer.begin(), it->second);
