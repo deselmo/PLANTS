@@ -83,12 +83,18 @@ struct MacBuffer{
 };
 
 
+struct MacBufferReceived{
+    uint8_t frag;
+    uint8_t seq_number;
+    MacBuffer * mac_buffer;
+};
+
 struct FragmentedPacket{
     uint64_t timestamp;
     bool lastReceived;
     uint8_t packet_number;
     uint16_t length;
-    std::vector<MacBuffer *> packets;
+    std::vector<MacBufferReceived *> packets;
 };
 
 struct MacBufferFragmentReceived{
