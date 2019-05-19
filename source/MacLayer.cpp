@@ -13,6 +13,7 @@ MacLayer::MacLayer(MicroBit* uBit, SerialCom* serial, int transmitPower){
 
 void MacLayer::init(){
     this->uBit->radio.enable();
+    this->uBit->seedRandom();
 
     uBit->messageBus.listen(MAC_LAYER, MAC_LAYER_PACKET_READY_TO_SEND, this, &MacLayer::send_to_radio);
     uBit->messageBus.listen(MICROBIT_ID_RADIO, MICROBIT_RADIO_EVT_DATAGRAM, this, &MacLayer::recv_from_radio);
@@ -158,6 +159,7 @@ void MacLayer::send_to_radio(MicroBitEvent){
     MacBuffer * toSend = outBuffer.back();
     if(toSend->timewait > 0)
     {
+        this->uBit->sleep(10);
         toSend->timewait--;
         outBuffer.pop_back();
         outBuffer.insert(outBuffer.begin(), toSend);
@@ -247,6 +249,11 @@ void MacLayer::recv_from_radio(MicroBitEvent){
     if(serial != NULL) serial->send(MAC_LAYER, 1, "something recv");
     
     PacketBuffer packet = uBit->radio.datagram.recv();
+
+    if(packet == PacketBuffer::EmptyPacket) {
+        return;
+    }
+
     uint8_t *payload = packet.getBytes();
     macbufferallocated++;
     MacBuffer * received = new MacBuffer;
@@ -434,7 +441,7 @@ bool MacLayer::checkRepetition(MacBuffer *received){
  */
 void MacLayer::sendAck(MacBuffer *received){
     macbufferallocated++;
-    MacBuffer *ack = new MacBuffer;
+    MacBuffer *ack = new MacBuffer {};
     ack->type = 1;
     ack->destination = received->source;
     ack->source = microbit_serial_number();
