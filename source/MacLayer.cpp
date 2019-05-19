@@ -73,7 +73,7 @@ int MacLayer::send(uint8_t *buffer, int len, uint32_t dest){
     if(dest != 0)
     {
         MacBufferSent *sent = new MacBufferSent;
-        sent->seq_number = seq_number-1;
+        sent->seq_number = seq_number == 0 ? 255 : seq_number-1;
         sent->total = toSend->size();
         sent->received = 0;
         waiting_for_ack[seq_number-1] = sent;
@@ -310,23 +310,31 @@ void MacLayer::recv_from_radio(MicroBitEvent){
 
 }
 
-bool compare_mac_buffers(const MacBuffer * first, const MacBuffer * second){
+bool compare_mac_buffers(const MacBufferReceived * first, const MacBufferReceived * second){
     return first->frag < second->frag;
 }
 
 void MacLayer::addToDataReady(FragmentedPacket *buf){
     if(serial != NULL) serial->send(MAC_LAYER, 1, "start addToDataReady");
+    if(buf->packets.front()->mac_buffer == NULL)
+    {
+        if(serial != NULL)
+            serial->send(MAC_LAYER, 1, "this packet has already been added to to received one's");
+        return;
+    }
     ManagedBuffer p(buf->length);
     uint8_t *bytes = p.getBytes();
     int len = 0;
-    vector<MacBuffer *>::iterator it;
+    vector<MacBufferReceived *>::iterator it;
     for(it = buf->packets.begin(); it != buf->packets.end(); ++it)
     {
-        uint8_t tmp = getLength((*it)->control);
-        memcpy(bytes+len,(*it)->payload, tmp);
+        MacBuffer *b = (*it)->mac_buffer;
+        uint8_t tmp = getLength(b->control);
+        memcpy(bytes+len,b->payload, tmp);
         len += tmp;
         macbufferallocated--;
-        delete *it;
+        (*it)->mac_buffer = NULL;
+        delete b;
     }
     inBuffer.insert(inBuffer.begin(), p);
     if(serial != NULL) serial->send(MAC_LAYER, 1, "MAC_LAYER_PACKET_RECEIVED");
@@ -334,6 +342,10 @@ void MacLayer::addToDataReady(FragmentedPacket *buf){
 }
 
 void MacLayer::addToFragmented(MacBuffer *fragment){
+    MacBufferReceived *mbr = new MacBufferReceived;
+    mbr->frag = fragment->frag;
+    mbr->seq_number = fragment->seq_number;
+    mbr->mac_buffer = fragment;
     if(serial != NULL) serial->send(MAC_LAYER, 1, "start addToFragmented");
     if(receive_buffer[fragment->source] == NULL)
     {
@@ -354,7 +366,7 @@ void MacLayer::addToFragmented(MacBuffer *fragment){
         received_fragment->fragmented[fragment->seq_number] = tmp;        
     }
     FragmentedPacket *fragments = received_fragment->fragmented[fragment->seq_number];
-    fragments->packets.push_back(fragment);
+    fragments->packets.push_back(mbr);
     fragments->timestamp = system_timer_current_time();
     if(isLast(fragment))
     {
@@ -367,21 +379,11 @@ void MacLayer::addToFragmented(MacBuffer *fragment){
     if(fragments->lastReceived)
     {
         if(serial != NULL) serial->send(MAC_LAYER, 1, "fragments->lastReceived");
-
         if((fragments->packets.size() == 1 && fragments->packet_number == 0) || fragments->packets.size() == fragments->packet_number)
         {
             if(serial != NULL) serial->send(MAC_LAYER, 1, "fragments->packets.size() == fragments->packet_number");
-            received_fragment->fragmented.erase(fragment->seq_number);
             std::sort(fragments->packets.begin(),fragments->packets.end(),compare_mac_buffers);
             addToDataReady(fragments);
-            /*if(received_fragment->fragmented.empty())
-            {
-                macbufferfragmentedreceived--;
-                delete received_fragment;
-                receive_buffer.erase(fragment->source);
-            }*/
-            fragmentedpacket--;
-            delete fragments;
         }
     }
 
@@ -557,12 +559,17 @@ void MacLayer::idleTick(){
             }
             else
             {
-                vector<MacBuffer *>::iterator it3;
+                vector<MacBufferReceived *>::iterator it3;
                 for(it3 = fp->packets.begin(); it3 != fp->packets.end();)
                 {
-                    MacBuffer *mb = *it3;
-                    if(mb != NULL)
-                        delete mb;
+                    MacBufferReceived *mbr = *it3;
+                    if(mbr != NULL)
+                    {
+                        MacBuffer *mb = mbr->mac_buffer;
+                        if(mb != NULL)
+                            delete mb;
+                        delete mbr;
+                    }
                     ++it3;                    
                 }
                 f->fragmented.erase(it2++);
