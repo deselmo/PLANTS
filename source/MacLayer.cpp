@@ -401,14 +401,23 @@ void MacLayer::orderPackets(FragmentedPacket *fragmented){
 }
 
 bool MacLayer::checkRepetition(MacBuffer *received){
+    
     if(receive_buffer[received->source] != NULL)
     {
         MacBufferFragmentReceived *tmp = receive_buffer[received->source];
         if(tmp->fragmented[received->seq_number] != NULL)
         {
+            MacBufferReceived * mbr = new MacBufferReceived;
+            mbr->seq_number = received->seq_number;
+            mbr->frag = received->frag;
+            mbr->mac_buffer = received;
             FragmentedPacket *fp = tmp->fragmented[received->seq_number];
-            if(std::find_if(fp->packets.begin(), fp->packets.end(), [received](MacBuffer * x){return received->seq_number == x->seq_number && received->frag == x->frag;}) != fp->packets.end())
+            if(std::find_if(fp->packets.begin(), fp->packets.end(), [mbr](MacBufferReceived * x){return mbr->seq_number == x->seq_number && mbr->frag == x->frag;}) != fp->packets.end())
+            {
+                delete mbr;
                 return true;
+            }
+            delete mbr;
         }
     }
     return false;
