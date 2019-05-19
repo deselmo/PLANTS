@@ -213,7 +213,6 @@ class MacLayer : public MicroBitComponent{
     void accomplishAck(MacBuffer *ack);
     bool isComplete(FragmentedPacket *fragmented);
     bool isLast(MacBuffer *fragment);
-    void orderPackets(FragmentedPacket *fragmented);
 
 
     /**

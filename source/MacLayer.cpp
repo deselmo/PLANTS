@@ -119,7 +119,6 @@ MacBuffer *MacLayer::createMacBuffer(uint8_t type, uint32_t dest, int len, uint8
 
 uint8_t MacLayer::setControl(int len, bool inc){
     uint8_t ret = (uint8_t) len;
-    uint8_t tmp = getLength(ret);
     if(inc)
         return ret;
     
@@ -396,9 +395,6 @@ bool MacLayer::isLast(MacBuffer *fragment){
     return !(control & 1 << 7);
 }
 
-void MacLayer::orderPackets(FragmentedPacket *fragmented){
-    
-}
 
 bool MacLayer::checkRepetition(MacBuffer *received){
     
