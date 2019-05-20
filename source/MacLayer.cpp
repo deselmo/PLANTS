@@ -1,5 +1,7 @@
 #include "MacLayer.h"
 #include "MicroBitDevice.h"
+#include "wait_api.h"
+#include <math.h>
 
 #include <algorithm>
 
@@ -157,15 +159,16 @@ vector<MacBuffer *> * MacLayer::prepareFragment(uint8_t *buffer, int len, uint32
  */
 void MacLayer::send_to_radio(MicroBitEvent){
     MacBuffer * toSend = outBuffer.back();
-    if(toSend->timewait > 0)
-    {
-        this->uBit->sleep(10);
-        toSend->timewait--;
-        outBuffer.pop_back();
-        outBuffer.insert(outBuffer.begin(), toSend);
-        MicroBitEvent evt(MAC_LAYER, MAC_LAYER_PACKET_READY_TO_SEND);
-        return;
-    }
+    wait_us(toSend->timewait);
+    // if(toSend->timewait > 0)
+    // {
+    //     this->uBit->sleep(10);
+    //     toSend->timewait--;
+    //     outBuffer.pop_back();
+    //     outBuffer.insert(outBuffer.begin(), toSend);
+    //     MicroBitEvent evt(MAC_LAYER, MAC_LAYER_PACKET_READY_TO_SEND);
+    //     return;
+    // }
     PacketBuffer p(MICROBIT_RADIO_MAX_PACKET_SIZE);
     uint8_t *payload = p.getBytes();
     int tmp = sizeof(uint8_t);
@@ -527,7 +530,8 @@ void MacLayer::idleTick(){
         else if(it->second->attempt < MAC_LAYER_RETRANSMISSION_ATTEMPT)
         {
             it->second->queued = true;
-            it->second->timewait = uBit->random(it->second->attempt);
+            // it->second->timewait = uBit->random(it->second->attempt);
+            it->second->timewait = uBit->random((pow(2, it->second->attempt) - 1) * 100);
             if(outBuffer.empty())
             {
                 outBuffer.insert(outBuffer.begin(), it->second);
