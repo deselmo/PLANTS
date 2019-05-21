@@ -43,7 +43,7 @@ void sink_recv_connection(MicroBitEvent) {
 
 void node_recv(MicroBitEvent) {
     DDMessage message_received = nl.recv();
-    if(message_received.isEmpty) return;
+    if(message_received.isEmpty()) return;
 
     uBit.display.print(message_received.payload.toManagedString());
 }
