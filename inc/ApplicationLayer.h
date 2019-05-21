@@ -100,13 +100,14 @@
 
 
 //Private Events
-#define PRIVATE_SEND_SENSING_REQ 1
+#define PRIVATE_SEND_SENSING_ACK 1
 
 struct Message{
     uint8_t type;
     uint32_t len;
     uint8_t *payload;
-    
+
+    static Message from(DDMessage);  
 };
 
 struct Sensor{
@@ -115,17 +116,18 @@ struct Sensor{
 
     ApplicationLayer *app;
     bool active_loop;
-    
+
     bool min_value;
     uint32_t min_value_threshold;
     bool max_value;
     uint32_t max_value_threshold;
     uint32_t sensing_rate;
-    void loop(Sensor *);
+    float loop(Sensor *);
 };
 
 struct AppAndData{
     ApplicationLayer *app;
+    uint32_t source;
     ManagedBuffer msg;
 };
 
@@ -150,9 +152,13 @@ class ApplicationLayer{
     
     void recv_from_network(MicroBitEvent);
     bool sendMessage(Message);
+    
+    friend void send_sensing_ack(void *);
+    friend void send_new_plant(void *);
+    friend void send_new_sample(void *);
 
-    friend void sensing_loop(void *par);
-    friend void send_sensing_req(void *par);
+    friend void sensing_loop(void *);
+    friend void send_sensing_req(void *);
 
 public:
     

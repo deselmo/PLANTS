@@ -23,17 +23,26 @@ void sensing_loop(void *par){
             sensor->active_loop = false;
             return;
         }
-        sensor->loop(sensor);
+        bool send = true;
+        float sensed = sensor->loop(sensor);
+        int tmp_sensed = (int)sensed;
+        if(sensor->min_value && tmp_sensed < sensor->min_value_threshold)
+            send = false;
+        if(sensor->max_value && tmp_sensed > sensor->max_value_threshold)
+            send = false;
+        if(send)
+            sensor->app->send_app_data(sensor->name, sensed);
         sensor->app->uBit->sleep(sensor->sensing_rate);
     }
 }
-void humidity_loop(Sensor *par){
+
+float humidity_loop(Sensor *par){
     
 }
 
 
 
-void thermomether_loop(Sensor *par){
+float thermomether_loop(Sensor *par){
 
 }
 
@@ -79,6 +88,7 @@ void ApplicationLayer::update_connection_status(MicroBitEvent e){
     DDConnection info = nl->recv_connection();
     if(info.status)
     {
+        send_microbit_info();
         connected = true;
         std::map<ManagedString, Sensor *>::iterator it;
         for(it = sensors.begin(); it != sensors.end(); ++it)
@@ -87,9 +97,9 @@ void ApplicationLayer::update_connection_status(MicroBitEvent e){
             if(!sensor->active_loop)
             {
                 sensor->active_loop = true;
-                create_fiber(sensing_loop, (void *)sensor);
+                create_fiber(&sensing_loop, (void *)sensor);
             }
-        }
+        } 
     }
     else
         connected = false;
@@ -156,6 +166,7 @@ void send_sensing_req(void *par){
         memcpy(&max_value, msg + len, sizeof(uint32_t));
         len += sizeof(uint32_t);
     }
+    delete tmp;
     Message toSend;
     toSend.type = SET_GRADIENT;
     toSend.len = sizeof(uint32_t);
@@ -234,4 +245,191 @@ bool ApplicationLayer::sendMessage(Message msg){
     uint8_t *buf = b.getBytes();
     memcpy(buf+1,msg.payload,msg.len);
     return nl->send(b, dest);
+}
+
+void ApplicationLayer::send_microbit_info(){
+    uint32_t len = sizeof(uint8_t) + sizeof(uint32_t)+sensors.size()*sizeof(uint32_t);
+    std::map<ManagedString, Sensor *>::iterator it;
+    for(it = sensors.begin(); it != sensors.end(); ++it)
+        len += it->second->name.length()+1;
+    ManagedBuffer b(len);
+    uint8_t *buf = b.getBytes();
+    uint32_t size = sensors.size();
+    len = 1;
+    buf[0] = MICRO_INFO;
+    memcpy(buf + len, &size, sizeof(uint32_t));
+    len += sizeof(uint32_t);
+    for(it = sensors.begin(); it != sensors.end(); ++it)
+    {
+        size = it->second->name.length() + 1;
+        memcpy(buf + len,&size,sizeof(uint32_t));
+        len += sizeof(uint32_t);
+        memcpy(buf + len, it->second->name.toCharArray(), size);
+        len += size;
+    }
+    nl->send(b);
+}
+
+void ApplicationLayer::send_app_data(ManagedString sensor, float value){
+    uint32_t len = sizeof(uint8_t) + sizeof(uint32_t);
+    len += sensor.length() + 1;
+    len += sizeof(float);
+    ManagedBuffer b(len);
+    uint8_t *buf = b.getBytes();
+    buf[0] = APP_DATA;
+    len = 1;
+    uint32_t size = sensor.length() + 1;
+    memcpy(buf + len, &size, sizeof(uint32_t));
+    len += sizeof(uint32_t);
+    memcpy(buf + len, sensor.toCharArray(), size);
+    len += size;
+    memcpy(buf + len, &value, sizeof(float));
+    nl->send(b);
+}
+
+void send_sensing_ack(void *par){
+    AppAndData *tmp = (AppAndData *)par;
+    ApplicationLayer *app = tmp->app;
+    ManagedBuffer msg = tmp->msg;
+    ManagedBuffer resp(msg.length() + 1 + sizeof(uint32_t));
+    resp[0] = SET_GRADIENT_ACK;
+    uint32_t size = msg.length();
+    uint8_t *buf = resp.getBytes();
+    memcpy(buf + 1,&size,sizeof(uint32_t));
+    memcpy(buf + 1+ sizeof(uint32_t), msg.getBytes(), size);
+    app->nl->send(resp);
+    delete tmp;
+}
+
+void send_new_plant(void *par){
+    AppAndData *tmp = (AppAndData *)par;
+    ApplicationLayer *app = tmp->app;
+    ManagedBuffer msg = tmp->msg;
+    uint32_t microbit_id = tmp->source;
+    ManagedBuffer resp(sizeof(uint32_t) + msg.length());
+    uint8_t *buf = resp.getBytes();
+    memcpy(buf, &microbit_id, sizeof(uint32_t));
+    memcpy(buf + sizeof(uint32_t), msg.getBytes(), msg.length());
+    app->serial->send(APPLICATION_ID, NEW_PLANT, resp);
+    delete tmp;
+}
+
+void send_new_sample(void *par){
+    AppAndData *tmp = (AppAndData *)par;
+    ApplicationLayer *app = tmp->app;
+    ManagedBuffer msg = tmp->msg;
+    uint32_t microbit_id = tmp->source;
+    ManagedBuffer resp(sizeof(uint32_t) + msg.length());
+    uint8_t *buf = resp.getBytes();
+    memcpy(buf, &microbit_id, sizeof(uint32_t));
+    memcpy(buf + sizeof(uint32_t), msg.getBytes(), msg.length());
+    app->serial->send(APPLICATION_ID, NEW_SAMPLE, resp);
+    delete tmp;
+}
+
+void ApplicationLayer::recv_from_network(MicroBitEvent e){
+    DDMessage msg = nl->recv();
+    if(msg == DDMessage::Empty)
+        return;
+    Message m = Message::from(msg);
+    //if I'm a node this is the only message I should receive :)
+    if(m.type == SET_GRADIENT)
+    {
+        uint32_t size;
+        uint32_t len;
+        uint8_t *payload = m.payload;
+        memcpy(&size,payload,sizeof(uint32_t));
+        len = sizeof(uint32_t);
+        ManagedString s((int)size);
+        uint8_t *str = (uint8_t *) s.toCharArray();
+        memcpy(str, payload + len, size);
+        len += size;
+        uint8_t sample;
+        uint8_t min;
+        uint8_t max;
+        memcpy(&sample, payload + len, 1);
+        len += 1;
+        memcpy(&min, payload + len, 1);
+        len += 1;
+        memcpy(&max, payload + len, 1);
+        len += 1;
+        uint32_t sample_rate;
+        uint32_t min_val;
+        uint32_t max_val;
+        if(sample == 1)
+        {
+            memcpy(&sample_rate, payload + len, sizeof(uint32_t));
+            len += sizeof(uint32_t);
+        }
+        if(min == 1)
+        {
+            memcpy(&min_val, payload + len, sizeof(uint32_t));
+            len += sizeof(uint32_t);
+        }
+        if(max == 1)
+        {
+            memcpy(&max_val, payload + len, sizeof(uint32_t));
+            len += sizeof(uint32_t);
+        }
+        if(sensors[s] != NULL)
+        {
+            Sensor *sensor = sensors[s];
+            if(min == 1)
+            {
+                sensor->min_value = true;
+                sensor->min_value_threshold = min_val;
+            }
+            else if(min == 2)
+                sensor->min_value = false;
+            if(max == 1)
+            {
+                sensor->max_value = true;
+                sensor->max_value_threshold = max_val;
+            }
+            if(sample == 1)
+            {
+                sensor->sensing_rate = sample_rate;
+                if(!sensor->active_loop && sample_rate != 0)
+                {
+                    sensor->active_loop = true;
+                    create_fiber(&sensing_loop, (void *)sensor);
+                }
+            }
+        }
+        ManagedBuffer b = s;
+        AppAndData *tmp = new AppAndData;
+        tmp->app = this;
+        tmp->msg = b;
+        create_fiber(&send_sensing_ack, (void *)tmp);   
+    }
+    //From here the message are received from the sink
+    else if(m.type == SET_GRADIENT_ACK)
+    {
+        if(dest == msg.source)
+        {
+            waiting_ack = false;
+            ManagedBuffer b(1);
+            b[0] = 1;
+            serial->send(APPLICATION_ID, SENSING_RESP, b);
+        }
+    }
+    else if(m.type == MICRO_INFO)
+    {
+        AppAndData *tmp = new AppAndData;
+        tmp->app = this;
+        tmp->source = msg.source;
+        ManagedBuffer b(m.payload, m.len);
+        tmp->msg = b;
+        create_fiber(&send_new_plant, (void *)tmp);
+    }
+    else if(m.type == APP_DATA)
+    {
+        AppAndData *tmp = new AppAndData;
+        tmp->app = this;
+        tmp->source = msg.source;
+        ManagedBuffer b(m.payload, m.len);
+        tmp->msg = b;
+        create_fiber(&send_new_sample, (void *)tmp);
+    }
+
 }
