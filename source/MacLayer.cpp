@@ -58,16 +58,14 @@ int MacLayer::send(uint8_t *buffer, int len, uint32_t dest){
     // MAC_LAYER_PAYLOAD_LENGTH then we need to fragment
     if(len > MAC_LAYER_PAYLOAD_LENGTH)
     {
-        ManagedBuffer b("fragmenting");
         if(serial != NULL)
-            serial->send(MAC_LAYER, 1, b);
+            serial->send(MAC_LAYER, 1, "fragmenting");
         toSend = prepareFragment(buffer, len, dest);
     }
     else
     {
-        ManagedBuffer b("not fragmenting");
         if(serial != NULL)
-            serial->send(MAC_LAYER, 1, b);
+            serial->send(MAC_LAYER, 1, "not fragmenting");
         toSend = new vector<MacBuffer *>;
         MacBuffer *tmp = createMacBuffer(0,dest,len,buffer, 0, true);
         toSend->insert(toSend->begin(),tmp);
@@ -194,9 +192,8 @@ void MacLayer::send_to_radio(MicroBitEvent){
         // retransmission of the packet
         if(toSend->type == 0 && toSend->destination != 0)
         {
-            ManagedBuffer b("sent message not brodcast");
             if(serial != NULL)
-                serial->send(MAC_LAYER,1,b);
+                serial->send(MAC_LAYER,1,"sent message not brodcast");
             toSend->timestamp = system_timer_current_time();
             uint16_t hash = getHash(toSend);
             if(waiting[hash] == toSend)
@@ -208,18 +205,16 @@ void MacLayer::send_to_radio(MicroBitEvent){
         // the message sent was an ack packet so nothing more to do   
         else if(toSend->type == 1)
         {
-            ManagedBuffer b("sent ack");
             if(serial != NULL)
-                serial->send(MAC_LAYER,1,b);
+                serial->send(MAC_LAYER,1,"sent ack");
             macbufferallocated--;
             delete toSend;
         }
         // the message sent was a brodcast packet
         else
         {
-            ManagedBuffer b("sent Brodcast");
             if(serial != NULL)
-                serial->send(MAC_LAYER,1,b);
+                serial->send(MAC_LAYER,1,"sent Brodcast");
             macbufferallocated--;
             delete toSend;
         }
