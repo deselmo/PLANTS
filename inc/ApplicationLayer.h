@@ -7,30 +7,28 @@
 
 #include <map>
 
-//sensing interval in milliseconds
-#define SENSING_INTERVAL 500
+//default sensing interval 5 min in milliseconds 
+#define SENSING_INTERVAL 300000
+
+//max waiting time for an ack
+#define ACK_WAITING_TIME 1000
 
 #define APPLICATION_ID 50
 
 //Serial messages from raspy to microbit
 /**
  * uint32_t microbit_id
- * uint32_t gradient_id
  * string sensor_name
+ * byte sample_rate
  * byte min_val
  * byte max_val
  * [
+ *  uint32_t sample_rate
  *  uint32_t min_val_threshold
  *  uint32_t max_val_threshold
  * ]
  */
-#define SENSING_REQ 3
-
-/**
- * uint32_t microbit_id
- * uint32_t gradient_id
- */
-#define REMOVE_SENSING_REQ 4
+#define SENSING_REQ 2
 
 //Serial messages from microbit to raspy
 
@@ -44,31 +42,22 @@
 #define SENSING_RESP 1
 
 /**
- * uint32_t gradient_id
- * byte:
- *  0 -> fine
- *  1 -> no route to microbit
- *  2 -> microbit disconnected
- */
-#define REMOVE_SENSING_RESP 2
-
-/**
  * uint32_t microbit_id
  * string sensor_name
  * float value
  */
-#define NEW_SAMPLE 5
+#define NEW_SAMPLE 3
 
 /**
  * uint32_t microbit_id
  * string [] sensors
  */
-#define NEW_PLANT 6
+#define NEW_PLANT 4
 
 /**
  * uint32_t microbit_id
  */
-#define DISCONNECTED_PLANT 7
+#define DISCONNECTED_PLANT 5
 
 
 //Network messages
@@ -76,11 +65,12 @@
 /**
  * SET GRADIENT Message
  * 
- * uint32_t gradient id
  * string sensor name
+ * byte sample_rate
  * byte min_val if set to 1 then we have a min_val gradient
  * byte max_val if set to 1 then we have a max_val gradient
  * [
+ *  uint32_t sample_rate value if sample_rate was 1
  *  uint32_t min_val_threshold if the min_val was 1
  *  uint32_t max_val_threshold if the max_val was 1  
  * ]
@@ -88,12 +78,11 @@
 #define SET_GRADIENT 1
 
 /**
- * REMOVE_GRADIENT Message
+ * SET GRADIENT ACK Message
  * 
- * uint32_t gradient id
+ * string sensor name
  */
-#define REMOVE_GRADIENT 2
-
+#define SET_GRADIENT_ACK 2
 /**
  * APP_DATA Message
  * 
@@ -110,18 +99,34 @@
 #define MICRO_INFO 4
 
 
+//Private Events
+#define PRIVATE_SEND_SENSING_REQ 1
+
 struct Message{
     uint8_t type;
+    uint32_t len;
     uint8_t *payload;
+    
 };
 
-struct Gradient{
+struct Sensor{
 
-    uint32_t id;
-    bool min_val;
-    uint32_t min_val_threshold;
-    bool max_val;
-    uint32_t max_val_threshold;
+    ManagedString name;
+
+    ApplicationLayer *app;
+    bool active_loop;
+    
+    bool min_value;
+    uint32_t min_value_threshold;
+    bool max_value;
+    uint32_t max_value_threshold;
+    uint32_t sensing_rate;
+    void loop(Sensor *);
+};
+
+struct AppAndData{
+    ApplicationLayer *app;
+    ManagedBuffer msg;
 };
 
 class ApplicationLayer{
@@ -129,23 +134,31 @@ class ApplicationLayer{
     MicroBit *uBit;
     NetworkLayer *nl;
     SerialCom *serial;
+
+    bool waiting_ack;
+    uint32_t dest;
+    bool connected;
+
+    std::map<ManagedString, Sensor *> sensors;
     bool sink_mode;
 
-    std::map<uint32_t, Gradient> gradients;
-
     void recv_sensing_req(ManagedBuffer);
-    void recv_remove_sensing_req(ManagedBuffer);
 
-    void send_app_data(ManagedString sensor, float value);
-    void send_micro_info();
+    void update_connection_status(MicroBitEvent);
+    void update_connection_status_sink();
+    void send_microbit_info();
     
     void recv_from_network(MicroBitEvent);
+    bool sendMessage(Message);
 
-    friend void sensing_loop(void *);
+    friend void sensing_loop(void *par);
+    friend void send_sensing_req(void *par);
 
 public:
     
     ApplicationLayer(MicroBit*,NetworkLayer*,SerialCom*,bool);
+    void send_app_data(ManagedString sensor, float value);
+    void sleep(uint32_t);
     void init();
 
 };
