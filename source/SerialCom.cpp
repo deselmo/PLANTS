@@ -157,7 +157,13 @@ void SerialCom::send(ManagedBuffer buf){
 
 void SerialCom::send_to_serial(MicroBitEvent e){
     ManagedBuffer toSend(out.front());
-    sent += uBit->serial.send(toSend.getBytes()+sent, toSend.length() - sent);
+    int res = uBit->serial.send(toSend.getBytes()+sent, toSend.length() - sent, ASYNC);
+    if(res == MICROBIT_SERIAL_IN_USE)
+    {
+        MicroBitEvent evt(SERIAL_ID, SERIAL_DATA_READY);
+        return;
+    }
+    sent += res;
     if(sent == toSend.length())
     {
         out.pop();
