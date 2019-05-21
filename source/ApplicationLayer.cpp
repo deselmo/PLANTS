@@ -14,7 +14,7 @@ Message Message::from(DDMessage msg){
     ret.type = b[0];
     ret.len = b.length() - 1;
     ret.payload = new uint8_t[b.length() -1];
-    memcpy(ret.payload,b.getBytes(), b.length - 1);
+    memcpy(ret.payload,b.getBytes(), b.length() - 1);
     return ret;
 }
 
@@ -73,7 +73,7 @@ void ApplicationLayer::init(){
         tmp->max_value = false;
         tmp->sensing_rate = 0;
         tmp->loop = humidity_loop;
-        sensors[tmp->name] = tmp;
+        sensors.push_back(tmp);
 
         tmp = new Sensor;
         tmp->name = "thermometer";
@@ -83,7 +83,7 @@ void ApplicationLayer::init(){
         tmp->max_value = false;
         tmp->sensing_rate = 0;
         tmp->loop = thermomether_loop;
-        sensors[tmp->name] = tmp;
+        sensors.push_back(tmp);
     }
 }
 
@@ -99,10 +99,10 @@ void ApplicationLayer::update_connection_status(MicroBitEvent e){
     {
         send_microbit_info();
         connected = true;
-        std::map<ManagedString, Sensor *>::iterator it;
+        std::vector<Sensor *>::iterator it;
         for(it = sensors.begin(); it != sensors.end(); ++it)
         {
-            Sensor *sensor = it->second;
+            Sensor *sensor = *it;
             if(!sensor->active_loop)
             {
                 sensor->active_loop = true;
@@ -261,9 +261,9 @@ bool ApplicationLayer::sendMessage(Message msg){
 
 void ApplicationLayer::send_microbit_info(){
     uint32_t len = sizeof(uint8_t) + sizeof(uint32_t)+sensors.size()*sizeof(uint32_t);
-    std::map<ManagedString, Sensor *>::iterator it;
+    std::vector<Sensor *>::iterator it;
     for(it = sensors.begin(); it != sensors.end(); ++it)
-        len += it->second->name.length()+1;
+        len += (*it)->name.length()+1;
     ManagedBuffer b(len);
     uint8_t *buf = b.getBytes();
     uint32_t size = sensors.size();
@@ -273,10 +273,10 @@ void ApplicationLayer::send_microbit_info(){
     len += sizeof(uint32_t);
     for(it = sensors.begin(); it != sensors.end(); ++it)
     {
-        size = it->second->name.length() + 1;
+        size = (*it)->name.length() + 1;
         memcpy(buf + len,&size,sizeof(uint32_t));
         len += sizeof(uint32_t);
-        memcpy(buf + len, it->second->name.toCharArray(), size);
+        memcpy(buf + len, (*it)->name.toCharArray(), size);
         len += size;
     }
     nl->send(b);
@@ -383,28 +383,32 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
             memcpy(&max_val, payload + len, sizeof(uint32_t));
             len += sizeof(uint32_t);
         }
-        if(sensors[s] != NULL)
+        std::vector<Sensor *>::iterator it;
+        for(it = sensors.begin(); it != sensors.end(); ++it)
         {
-            Sensor *sensor = sensors[s];
-            if(min == 1)
+            Sensor *sensor = *it;
+            if(sensor->name == s)
             {
-                sensor->min_value = true;
-                sensor->min_value_threshold = min_val;
-            }
-            else if(min == 2)
-                sensor->min_value = false;
-            if(max == 1)
-            {
-                sensor->max_value = true;
-                sensor->max_value_threshold = max_val;
-            }
-            if(sample == 1)
-            {
-                sensor->sensing_rate = sample_rate;
-                if(!sensor->active_loop && sample_rate != 0)
+                if(min == 1)
                 {
-                    sensor->active_loop = true;
-                    create_fiber(&sensing_loop, (void *)sensor);
+                    sensor->min_value = true;
+                    sensor->min_value_threshold = min_val;
+                }
+                else if(min == 2)
+                    sensor->min_value = false;
+                if(max == 1)
+                {
+                    sensor->max_value = true;
+                    sensor->max_value_threshold = max_val;
+                }
+                if(sample == 1)
+                {
+                    sensor->sensing_rate = sample_rate;
+                    if(!sensor->active_loop && sample_rate != 0)
+                    {
+                        sensor->active_loop = true;
+                        create_fiber(&sensing_loop, (void *)sensor);
+                    }
                 }
             }
         }

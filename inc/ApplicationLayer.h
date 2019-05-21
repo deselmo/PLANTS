@@ -5,7 +5,7 @@
 #include "SerialCom.h"
 #include "NetworkLayer.h"
 
-#include <map>
+#include <vector>
 
 //default sensing interval 5 min in milliseconds 
 #define SENSING_INTERVAL 300000
@@ -110,26 +110,8 @@ struct Message{
     static Message from(DDMessage);  
 };
 
-struct Sensor{
-
-    ManagedString name;
-
-    ApplicationLayer *app;
-    bool active_loop;
-
-    bool min_value;
-    uint32_t min_value_threshold;
-    bool max_value;
-    uint32_t max_value_threshold;
-    uint32_t sensing_rate;
-    float loop(Sensor *);
-};
-
-struct AppAndData{
-    ApplicationLayer *app;
-    uint32_t source;
-    ManagedBuffer msg;
-};
+struct Sensor;
+struct AppAndData;
 
 class ApplicationLayer{
 
@@ -141,7 +123,7 @@ class ApplicationLayer{
     uint32_t dest;
     bool connected;
 
-    std::map<ManagedString, Sensor *> sensors;
+    std::vector<Sensor *> sensors;
     bool sink_mode;
 
     void recv_sensing_req(ManagedBuffer);
@@ -169,8 +151,25 @@ public:
 
 };
 
+struct AppAndData{
+    ApplicationLayer *app;
+    uint32_t source;
+    ManagedBuffer msg;
+};
 
+struct Sensor{
 
+    ManagedString name;
 
+    ApplicationLayer *app;
+    bool active_loop;
+
+    bool min_value;
+    uint32_t min_value_threshold;
+    bool max_value;
+    uint32_t max_value_threshold;
+    uint32_t sensing_rate;
+    float (*loop)(Sensor *);
+};
 
 #endif
