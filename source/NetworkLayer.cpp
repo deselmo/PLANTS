@@ -1097,7 +1097,11 @@
 
     inline void NetworkLayer::serial_send_debug(ManagedBuffer message) {
         if(this->debug && this->serial != NULL)
-            this->serial->send(101, 1, message);
+            this->serial->send(
+                NETWORK_LAYER_INTERNALS,
+                NETWORK_LAYER_SERIAL_DEBUG,
+                message
+            );
     }
 
     void NetworkLayer::serial_get_node_route(uint32_t destination) {
