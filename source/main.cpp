@@ -24,7 +24,7 @@ void to_serial(ManagedBuffer message) {
 void sink_recv(MicroBitEvent) {
     DDMessage message_received = nl.recv();
 
-    if(message_received.isEmpty) return;
+    if(message_received.isEmpty()) return;
 
     to_serial(message_received.payload);
     uBit.display.print(message_received.payload.toManagedString());
