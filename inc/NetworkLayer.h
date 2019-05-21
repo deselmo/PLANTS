@@ -43,6 +43,17 @@ struct DDConnection {
     bool isEmpty();
 };
 
+struct DDMessage {
+    uint32_t      source;
+    ManagedBuffer payload;
+
+    bool operator==(const DDMessage&);
+    bool operator!=(const DDMessage&);
+
+    static DDMessage Empty;
+    bool isEmpty();
+};
+
 
 // Private events, DO NOT USE
 enum {
@@ -208,7 +219,7 @@ class NetworkLayer : public MicroBitComponent {
     std::queue<DDPacket> outBufferPackets;
 
     // DD_DATA packets waiting to be processed by application level
-    std::queue<ManagedBuffer> inBufferPackets;
+    std::queue<DDMessage> inBufferPackets;
 
     // Queue of new node connected with the respective broadcast number
     std::queue<DDConnection> inBufferNodes;
@@ -330,7 +341,7 @@ class NetworkLayer : public MicroBitComponent {
         bool send(ManagedBuffer, uint32_t destination);
 
         // interface provided to application layer
-        ManagedBuffer recv();
+        DDMessage recv();
 
         // interface provided to application layer
         DDConnection recv_connection();

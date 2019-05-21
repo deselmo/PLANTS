@@ -22,12 +22,12 @@ void to_serial(ManagedBuffer message) {
 
 
 void sink_recv(MicroBitEvent) {
-    ManagedBuffer message_received = nl.recv();
+    DDMessage message_received = nl.recv();
 
-    if(message_received == ManagedBuffer::EmptyPacket) return;
+    if(message_received.isEmpty) return;
 
-    to_serial(message_received);
-    uBit.display.print(message_received.toManagedString());
+    to_serial(message_received.payload);
+    uBit.display.print(message_received.payload.toManagedString());
 }
 
 void sink_recv_connection(MicroBitEvent) {
@@ -42,10 +42,10 @@ void sink_recv_connection(MicroBitEvent) {
 
 
 void node_recv(MicroBitEvent) {
-    ManagedBuffer message_received = nl.recv();
-    if(message_received == ManagedBuffer::EmptyPacket) return;
+    DDMessage message_received = nl.recv();
+    if(message_received.isEmpty) return;
 
-    uBit.display.print(message_received.toManagedString());
+    uBit.display.print(message_received.payload.toManagedString());
 }
 
 void node_recv_connection(MicroBitEvent) {
@@ -90,7 +90,7 @@ int main() {
                 uBit.display.print("S");
             }
 
-            uBit.sleep(200);
+            uBit.sleep(100);
         }
     }
 
@@ -136,7 +136,7 @@ int main() {
                 uBit.display.print("R");
             }
 
-            uBit.sleep(200);
+            uBit.sleep(100);
         }
     }
 

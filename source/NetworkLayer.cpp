@@ -408,6 +408,24 @@
 // }
 
 
+// DDMessage {
+    DDMessage DDMessage::Empty = DDMessage {};
+
+    bool DDMessage::operator==(const DDMessage& other) {
+        return  this->source  == other.source &&
+                this->payload == other.payload;
+    }
+
+    bool DDMessage::operator!=(const DDMessage& other) {
+        return !(*this==other);
+    }
+
+    bool DDMessage::isEmpty() {
+        return *this == DDMessage::Empty;
+    }
+// }
+
+
 // NetworkLayer {
     NetworkLayer::NetworkLayer(
         MicroBit*  uBit,
@@ -607,9 +625,8 @@
 
         this->serial_send_get_payload = payload;
 
-        this->serial_get_node_route(destination);
-
         this->serial_wait_route_found = true;
+        this->serial_get_node_route(destination);
         while(this->serial_wait_route_found) { this->uBit->sleep(50); }
 
         return this->serial_route_found;
@@ -624,13 +641,13 @@
      *
      * @return the data received, or an empty ManagedBuffer if no data is available.
      */
-    ManagedBuffer NetworkLayer::recv() {
+    DDMessage NetworkLayer::recv() {
         if(inBufferPackets.empty())
-            return ManagedBuffer::EmptyPacket;
+            return DDMessage::Empty;
 
-        ManagedBuffer packet = inBufferPackets.front();
+        DDMessage message = inBufferPackets.front();
         inBufferPackets.pop();
-        return packet;
+        return message;
     }
 
     DDConnection NetworkLayer::recv_connection() {
@@ -665,7 +682,10 @@
                     }
 
                     this->serial_send_debug("RECV: DD_DATA");
-                    this->inBufferPackets.push(dd_packet.payload);
+                    this->inBufferPackets.push(DDMessage { 
+                        .source  = dd_packet.header.origin,
+                        .payload = dd_packet.payload
+                    });
                     MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_PACKET_RECEIVED); 
 
                 } break;
@@ -769,7 +789,10 @@
 
                     if(node_route.size == 0) {
                         this->serial_send_debug("RECV: DD_COMMAND, for me");
-                        this->inBufferPackets.push(payload);
+                        this->inBufferPackets.push(DDMessage {
+                            .source  = dd_packet.header.origin,
+                            .payload = payload
+                        });
                         MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_PACKET_RECEIVED); 
 
 
