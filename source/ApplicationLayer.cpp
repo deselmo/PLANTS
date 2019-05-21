@@ -8,6 +8,15 @@ ApplicationLayer::ApplicationLayer(MicroBit* uBit, NetworkLayer* nl, SerialCom* 
     this->connected = sink_mode ? true : false;
 }
 
+Message Message::from(DDMessage msg){
+    Message ret;
+    ManagedBuffer b = msg.payload;
+    ret.type = b[0];
+    ret.len = b.length() - 1;
+    ret.payload = new uint8_t[b.length() -1];
+    memcpy(ret.payload,b.getBytes(), b.length - 1);
+    return ret;
+}
 
 void sensing_loop(void *par){
     Sensor *sensor = (Sensor *)par;
@@ -181,6 +190,7 @@ void send_sensing_req(void *par){
     memcpy(payload,&sensor_len, sizeof(uint32_t));
     len += sizeof(uint32_t);
     memcpy(payload + len, sensor_name, sensor_len);
+    delete sensor_name;
     len += sensor_len;
     memcpy(payload + len, &sample, 1);
     len += 1;
@@ -206,12 +216,14 @@ void send_sensing_req(void *par){
     app->dest = microbit_id;
     if(!app->sendMessage(toSend))
     {
+        delete toSend.payload;
         app->waiting_ack = false;
         ManagedBuffer b(1);
         b[0] = 1;
         app->serial->send(APPLICATION_ID, SENSING_RESP, b);
         return;
     }
+    delete toSend.payload;
     uint32_t start = system_timer_current_time();
     while(app->waiting_ack && start - system_timer_current_time() < ACK_WAITING_TIME)
         app->uBit->sleep(50);
@@ -431,5 +443,5 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
         tmp->msg = b;
         create_fiber(&send_new_sample, (void *)tmp);
     }
-
+    delete m.payload;
 }
