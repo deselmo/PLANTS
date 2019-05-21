@@ -157,7 +157,7 @@ void SerialCom::send(ManagedBuffer buf){
 
 void SerialCom::send_to_serial(MicroBitEvent e){
     ManagedBuffer toSend(out.front());
-    sent += uBit->serial.send(toSend.getBytes()+sent, toSend.length() - sent, ASYNC);
+    sent += uBit->serial.send(toSend.getBytes()+sent, toSend.length() - sent);
     if(sent == toSend.length())
     {
         out.pop();

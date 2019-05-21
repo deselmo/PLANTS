@@ -10,57 +10,57 @@
 #define NETWORK_LAYER_INTERNALS 131
 
 #define NETWORK_BROADCAST 0
-#define NETWORK_LAYER_DD_RT_INIT_INTERVAL      300000 // 5 minute
-#define NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL 5000  // 5 second
+#define NETWORK_LAYER_DD_RT_INIT_INTERVAL_FAST 500 // 2 second
+#define NETWORK_LAYER_DD_RT_INIT_INTERVAL      60000 // 1 minute
+#define NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL 1000  // 1 second
 
 
 // PUBLIC EVENTS
 enum {
     /**
-     * Event raised for sinks and nodes
-     * 
-     * Raised when a new packet is received:
+     * Event raised when a new packet is received:
      * a sink receives a DD_DATA
      * a node receives a DD_COMMAND
      */
     NETWORK_LAYER_PACKET_RECEIVED = 1,
 
     /**
-     * Event raised for nodes
-     * 
-     * Raised when a node logically connects to a sink
+     * Event raised:
+     * - in sink mode when a node logically connects or loses connection to the sink
+     * - in not sink mode when the node logically connects or loses connection to a sink
      */
-    NETWORK_LAYER_RT_INIT,
-
-    /**
-     * Event raised for nodes
-     * 
-     * Raised when a node logically loses connection with a sink
-     */
-    NETWORK_LAYER_RT_BROKEN,
-
-    /**
-     * Event raised for sinks
-     * 
-     * Raised when a node logically connects or loses connection to the sink
-     */
-    NETWORK_LAYER_NODE_CONNECTIONS,
+    NETWORK_LAYER_CONNECTION_UPDATE,
 };
+
+struct DDConnection {
+    bool     status;
+    uint32_t address;
+
+    bool operator==(const DDConnection&);
+    bool operator!=(const DDConnection&);
+
+    static DDConnection Empty;
+    bool isEmpty();
+};
+
 
 // Private events, DO NOT USE
 enum {
     NETWORK_LAYER_PACKET_READY_TO_SEND = 1,
     NETWORK_LAYER_SERIAL_ROUTING_TABLE = 2,
+    NETWORK_LAYER_SERIAL_READY_TO_SEND,
+    NETWORK_LAYER_INCREMENT_BROADCAST_COUNTER
 };
 
 
 enum DDType {
-    DD_RT_INIT, // broadcast
-    DD_DATA,    // to rely,
-    DD_COMMAND, // to forward list
-    DD_RT_ACK,  // to rely with list of traversed nodes
-    DD_JOIN,    // (to rely) if (rt_formed) else (to broadcast)
-    DD_LEAVE,   // to rely, contain a node id and the broadcast counter
+    DD_RT_INIT,         // broadcast
+    DD_DATA,            // to rely,
+    DD_COMMAND,         // to forward list
+    DD_RT_ACK,          // to rely with list of traversed nodes
+    DD_JOIN,            // (to rely) if (rt_formed) else (to broadcast)
+    DD_LEAVE,           // to rely, contain a node id and the broadcast counter
+    DD_CONNECTION_LOST, // to broadcast, connection loss alert, used from subtree node
 };
 
 
@@ -73,7 +73,7 @@ enum DDSend_state {
 
 
 enum DDSerialSendState {
-    DD_SERIAL_SEND_NONE,
+    DD_SERIAL_READY_TO_SEND,
     DD_SERIAL_SEND_CLEAR,
     DD_SERIAL_SEND_GET,
     DD_SERIAL_SEND_PUT,
@@ -93,7 +93,6 @@ struct DDPacketData;
 struct DDPacket;
 struct DDNodeRoute;
 struct DDPayloadWithNodeRoute;
-struct DDNodeConnection;
 class  NetworkLayer;
 
 
@@ -130,7 +129,7 @@ struct DDPacket {
 
     bool extractCOMMAND(DDNodeRoute&, ManagedBuffer& payload);
 
-    bool extractLEAVE(uint32_t& address, uint64_t& broadcast_number);
+    bool extractLEAVE(uint32_t& address);
 
 
     bool operator==(const DDPacket&);
@@ -200,19 +199,6 @@ struct DDPayloadWithNodeRoute {
 };
 
 
-struct DDNodeConnection {
-    bool     status;
-    uint32_t address;
-    uint64_t broadcast_counter;
-
-    bool operator==(const DDNodeConnection&);
-    bool operator!=(const DDNodeConnection&);
-
-    static DDNodeConnection Empty;
-    bool isEmpty();
-};
-
-
 class NetworkLayer : public MicroBitComponent {
     MicroBit *uBit;
     MacLayer mac_layer;
@@ -224,17 +210,18 @@ class NetworkLayer : public MicroBitComponent {
     std::queue<ManagedBuffer> inBufferPackets;
 
     // Queue of new node connected with the respective broadcast number
-    std::queue<DDNodeConnection> inBufferNodes;
+    std::queue<DDConnection> inBufferNodes;
 
     const uint32_t network_id;
-    const bool     sink_mode;
+    bool     sink_mode;
     uint32_t source;
 
-    const bool debug;
+    bool debug;
 
-    volatile uint64_t broadcast_counter;
+    volatile uint64_t broadcast_counter = 0;
     volatile bool     rt_formed = false;
     volatile uint32_t rely      = 0;
+    volatile bool fast_rt_init  = false;
 
     // time of the last DD_RT_INIT sent
     volatile uint64_t time_last_operation = 0;
@@ -245,14 +232,20 @@ class NetworkLayer : public MicroBitComponent {
 
 
     // needed for the serial
+    std::queue<ManagedBuffer> outSerialPackets;
+    ManagedBuffer serial_received_buffer;
+    ManagedBuffer serial_packet_in_send;
     volatile bool serial_initiated = false;
-    DDSerialSendState serial_send_state = DD_SERIAL_SEND_NONE;
+    DDSerialSendState serial_send_state = DD_SERIAL_READY_TO_SEND;
     ManagedBuffer serial_send_get_payload;
     uint32_t serial_send_put_origin = 0;
-    ManagedBuffer serial_in_sending_buffer;
     volatile bool serial_wait_route_found = false;
     volatile bool serial_route_found = false;
-    ManagedBuffer serial_received_buffer;
+
+
+    // avoid_rt_init_from
+    bool avoid_rt_init_from_enabled = false;
+    uint32_t avoid_rt_init_from_address = 0;
 
 
     private:
@@ -262,6 +255,7 @@ class NetworkLayer : public MicroBitComponent {
         void packet_timeout(MicroBitEvent);
         void recv_from_mac(MicroBitEvent); // evt handler for MAC_LAYER_PACKET_RECEIVED events
 
+        void send_to_serial(MicroBitEvent);
         void recv_from_serial(ManagedBuffer);
         void recv_from_serial(MicroBitEvent);
 
@@ -276,7 +270,7 @@ class NetworkLayer : public MicroBitComponent {
         void rt_connect(uint64_t broadcast_counter, uint32_t rely);
 
         
-        void incr_broadcast_counter();
+        void incr_broadcast_counter(MicroBitEvent);
 
         void get_store_broadcast_counter();
         void put_store_broadcast_counter();
@@ -285,11 +279,11 @@ class NetworkLayer : public MicroBitComponent {
         void serial_wait_init();
 
         void serial_get_node_route(uint32_t destination);
-        void serial_put_node_route(DDNodeRoute);
+        void serial_put_node_route(DDNodeRoute, uint32_t destination);
         void serial_clear_node_routes();
         void serial_send(ManagedBuffer payload);
 
-        void serial_send_debug(ManagedBuffer payload);
+        inline void serial_send_debug(ManagedBuffer payload);
 
 
         // send functions
@@ -299,6 +293,7 @@ class NetworkLayer : public MicroBitComponent {
         void send_rt_ack();
         void send_rt_ack(DDNodeRoute, uint32_t origin);
         void send_join_request();
+        void send_join_request(uint32_t origin);
         void send_command(
             DDNodeRoute,
             ManagedBuffer payload,
@@ -308,19 +303,21 @@ class NetworkLayer : public MicroBitComponent {
         void send_command(ManagedBuffer payload, DDNodeRoute, uint32_t destination);
         void send_leave();
         void send_leave(ManagedBuffer payload, uint32_t origin);
+        void send_connection_lost();
 
 
     public:
         NetworkLayer(
             MicroBit* uBit,
             uint16_t network_id,
-            SerialCom* serial,
+            int transmitPower = 0
+        );
+
+        void init(
+            SerialCom* serial = NULL,
             bool sink_mode = false,
-            int transmitPower = 0,
             bool debug = false
         );
-        
-        void init();
 
         uint16_t get_network_id() { return this->network_id; };
         uint32_t get_source() { return this->source; };
@@ -335,7 +332,9 @@ class NetworkLayer : public MicroBitComponent {
         ManagedBuffer recv();
 
         // interface provided to application layer
-        DDNodeConnection recv_node();
+        DDConnection recv_connection();
+
+        void avoid_rt_init_from(uint32_t address);
 
         virtual void idleTick();
 };

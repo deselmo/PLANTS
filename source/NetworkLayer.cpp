@@ -52,7 +52,7 @@
         return !node_route.isEmpty();
     }
 
-    bool DDPacket::extractCOMMAND(DDNodeRoute& node_rotue, ManagedBuffer& payload) {
+    bool DDPacket::extractCOMMAND(DDNodeRoute& node_route, ManagedBuffer& payload) {
         if (this->header.type != DD_COMMAND) {
             return false;
         }
@@ -64,34 +64,23 @@
             return false;
         }
 
-        node_rotue = payload_with_node_route.node_route;
+        node_route = payload_with_node_route.node_route;
 
         payload = payload_with_node_route.payload;
 
         return true;
     }
-    
-    bool DDPacket::extractLEAVE(uint32_t& address, uint64_t& broadcast_number) {
+
+    bool DDPacket::extractLEAVE(uint32_t& address) {
         if (this->header.type != DD_LEAVE ||
-            this->payload.length() != sizeof(uint32_t) + sizeof(uint64_t)
+            this->payload.length() != sizeof(uint32_t)
         ) {
             return false;
         }
 
-        uint64_t offset = 0;
-        uint64_t length = 0;
-
-        length = sizeof(uint32_t);
-        address = * (uint32_t*) this->payload.getBytes() + offset;
-        offset += length;
-
-        length = sizeof(uint64_t);
-        broadcast_number = * (uint64_t*) this->payload.getBytes() + offset;
-        offset += length;
-
+        address = * (uint32_t*) this->payload.getBytes() + sizeof(uint32_t);
         return true;
     }
-
 
     bool DDPacket::operator==(const DDPacket& other) {
         return this->header.type       == other.header.type       &&
@@ -401,21 +390,20 @@
 // }
 
 
-// DDNodeConnection {
-    DDNodeConnection DDNodeConnection::Empty = DDNodeConnection {};
+// DDConnection {
+    DDConnection DDConnection::Empty = DDConnection {};
 
-    bool DDNodeConnection::operator==(const DDNodeConnection& other) {
+    bool DDConnection::operator==(const DDConnection& other) {
         return  this->status            == other.status &&
-                this->address           == other.address &&
-                this->broadcast_counter == other.broadcast_counter;
+                this->address           == other.address;
     }
 
-    bool DDNodeConnection::operator!=(const DDNodeConnection& other) {
+    bool DDConnection::operator!=(const DDConnection& other) {
         return !(*this==other);
     }
 
-    bool DDNodeConnection::isEmpty() {
-        return *this == DDNodeConnection::Empty;
+    bool DDConnection::isEmpty() {
+        return *this == DDConnection::Empty;
     }
 // }
 
@@ -424,25 +412,27 @@
     NetworkLayer::NetworkLayer(
         MicroBit*  uBit,
         uint16_t   network_id,
-        SerialCom* serial,
-        bool sink_mode,
-        int transmitPower,
-        bool debug
+        int transmitPower
     )
         : uBit                (uBit)
         , mac_layer           (MacLayer(
                                     uBit,
-                                    (debug) ? serial : NULL,
+                                    NULL,
                                     transmitPower)
                                 )
-        , serial              (serial)
         , network_id          (network_id)
-        , sink_mode           (sink_mode)
-        , debug               (debug)
     {};
 
 
-    void NetworkLayer::init() {
+    void NetworkLayer::init(
+        SerialCom* serial,
+        bool sink_mode,
+        bool debug
+    ) {
+        this->serial = serial;
+        this->sink_mode = sink_mode;
+        this->debug = debug;
+
         this->uBit->messageBus.listen(
             MAC_LAYER,
             MAC_LAYER_PACKET_RECEIVED,
@@ -467,11 +457,6 @@
             this, &NetworkLayer::packet_timeout
         );
 
-
-        if(this->sink_mode) {
-            this->get_store_broadcast_counter();
-        }
-
         if(this->serial) {
             this->uBit->messageBus.listen(
                 NETWORK_LAYER_INTERNALS,
@@ -485,13 +470,35 @@
                 this, &NetworkLayer::recv_from_serial
             );
 
+            this->uBit->messageBus.listen(
+                NETWORK_LAYER_INTERNALS,
+                NETWORK_LAYER_SERIAL_READY_TO_SEND,
+                this, &NetworkLayer::send_to_serial
+            );
+
+
             this->serial_wait_init();
         }
+
+
+        if(this->sink_mode) {
+            this->get_store_broadcast_counter();
+
+            this->uBit->messageBus.listen(
+                NETWORK_LAYER_INTERNALS,
+                NETWORK_LAYER_INCREMENT_BROADCAST_COUNTER,
+                this, &NetworkLayer::incr_broadcast_counter
+            );
+            
+            this->serial_send_debug("broadcast counter retrieved:");
+            this->serial_send_debug(ManagedBuffer((uint8_t*)&this->broadcast_counter, sizeof(this->broadcast_counter)));
+        }
+
 
         this->mac_layer.init();
 
         this->source = microbit_serial_number();
-        this->serial_in_sending_buffer = ManagedBuffer::EmptyPacket;
+        this->serial_packet_in_send = ManagedBuffer::EmptyPacket;
         this->serial_send_get_payload = ManagedBuffer::EmptyPacket;
         this->serial_received_buffer = ManagedBuffer::EmptyPacket;
 
@@ -500,13 +507,52 @@
 
 
     void NetworkLayer::idleTick() {
-        if(this->serial_send_state != DD_SERIAL_SEND_NONE) {
-            return;
+        if(this->sink_mode) {
+            if(this->serial_send_state != DD_SERIAL_READY_TO_SEND) {
+                return;
+            }
+
+            if(this->outSerialPackets.size()) {
+                this->serial_send_debug("found serial message_to_send");
+
+                DDSerialMode serial_mode = (DDSerialMode) this->outSerialPackets.front().getByte(0);
+
+                switch(serial_mode){
+                    case DD_SERIAL_GET:
+                        this->serial_send_state = DD_SERIAL_SEND_GET;
+                        break;
+                    case DD_SERIAL_PUT:
+                        this->serial_send_state = DD_SERIAL_SEND_PUT;
+                        break;
+                    case DD_SERIAL_CLEAR:
+                        this->serial_send_debug("clear");
+                        this->serial_send_state = DD_SERIAL_SEND_CLEAR;
+                        break;
+                    case DD_SERIAL_INIT:
+                    case DD_SERIAL_INIT_ACK:
+                        return;
+                }
+                
+                MicroBitEvent(
+                    NETWORK_LAYER_INTERNALS,
+                    NETWORK_LAYER_SERIAL_READY_TO_SEND
+                );
+
+                return;
+            }
         }
 
+
         if(this->sink_mode) {
-            if(this->elapsed_from_last_operation(NETWORK_LAYER_DD_RT_INIT_INTERVAL)) {
-                this->incr_broadcast_counter();
+            if( (this->fast_rt_init &&
+                 this->elapsed_from_last_operation(NETWORK_LAYER_DD_RT_INIT_INTERVAL_FAST)
+                ) || this->elapsed_from_last_operation(NETWORK_LAYER_DD_RT_INIT_INTERVAL)
+            ) {
+                this->serial_send_debug("timeout triggered");
+                this->fast_rt_init = false;
+                MicroBitEvent(NETWORK_LAYER_INTERNALS,
+                    NETWORK_LAYER_INCREMENT_BROADCAST_COUNTER
+                );
             }
         } else if(!this->rt_formed &&
                 this->elapsed_from_last_operation(NETWORK_LAYER_DD_JOIN_REQUEST_INTERVAL)
@@ -526,10 +572,17 @@
                     this->send_state = DD_WAIT_TO_SUBTREE;
                     break;
 
+                case DD_CONNECTION_LOST:
                 case DD_RT_INIT:
-                case DD_JOIN:
                     this->send_state = DD_WAIT_TO_BROADCAST;
                     break;
+
+                case DD_JOIN:
+                    if(this->rt_formed) {
+                        this->send_state = DD_WAIT_TO_SINK;
+                    } else {
+                        this->send_state = DD_WAIT_TO_BROADCAST;
+                    }
             }
 
             if(this->send_state != DD_READY_TO_SEND) {
@@ -543,7 +596,7 @@
 
 
     bool NetworkLayer::send(ManagedBuffer payload) {
-        if(this->sink_mode || !this->rely) return false;
+        if(this->sink_mode || !this->rt_formed) return false;
         
         this->send_data(payload);
         return true;
@@ -580,11 +633,11 @@
         return packet;
     }
 
-    DDNodeConnection NetworkLayer::recv_node() {
+    DDConnection NetworkLayer::recv_connection() {
         if(inBufferNodes.empty())
-            return DDNodeConnection::Empty;
+            return DDConnection::Empty;
 
-        DDNodeConnection connected_node = inBufferNodes.front();
+        DDConnection connected_node = inBufferNodes.front();
         inBufferNodes.pop();
 
         return connected_node;
@@ -604,24 +657,28 @@
         if(this->sink_mode) {
             switch(dd_packet.header.type) {
                 case DD_RT_INIT: {
-                    this->serial_send_debug("recv_from_mac: DD_RT_INIT");
-                    return;
                 } break;
 
                 case DD_DATA: {
-                    this->serial_send_debug("recv_from_mac: DD_DATA");
+                    if(dd_packet.header.forward != this->source) {
+                        return;
+                    }
+
+                    this->serial_send_debug("RECV: DD_DATA");
                     this->inBufferPackets.push(dd_packet.payload);
                     MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_PACKET_RECEIVED); 
 
                 } break;
 
                 case DD_COMMAND: {
-                    this->serial_send_debug("recv_from_mac: DD_COMMAND");
                     return;
                 } break;
 
                 case DD_RT_ACK: {
-                    this->serial_send_debug("recv_from_mac: DD_RT_ACK");
+                    if(dd_packet.header.forward != this->source) {
+                        return;
+                    }
+
                     DDNodeRoute node_route;
                     uint64_t broadcast_counter;
 
@@ -629,82 +686,95 @@
                             broadcast_counter != this->broadcast_counter) {
                         return;
                     }
+                    this->serial_send_debug("RECV: DD_RT_ACK");
 
-                    this->serial_send_put_origin = dd_packet.header.origin;
-
-                    this->serial_put_node_route(node_route);
+                    this->serial_put_node_route(node_route, dd_packet.header.origin);
                 } break;
 
                 case DD_JOIN: {
-                    this->serial_send_debug("recv_from_mac: DD_JOIN");
-                    this->send_rt_init();
+                    this->serial_send_debug("RECV: DD_JOIN");
+                    if(!this->fast_rt_init) {
+                        this->time_last_operation = system_timer_current_time();
+                        this->fast_rt_init = true;
+                    }
                 } break;
 
                 case DD_LEAVE: {
-                    this->serial_send_debug("recv_from_mac: DD_LEAVE");
-                    uint32_t disconnected_node_address;
-                    uint64_t broadcast_counter;
-
-                    if(!dd_packet.extractLEAVE(disconnected_node_address, broadcast_counter) ||
-                    broadcast_counter != this->broadcast_counter) {
+                    if(dd_packet.header.forward != this->source) {
                         return;
                     }
 
-                    this->inBufferNodes.push(DDNodeConnection {
+                    this->serial_send_debug("RECV: DD_LEAVE");
+                    uint32_t disconnected_node_address;
+
+                    if(!dd_packet.extractLEAVE(disconnected_node_address)) {
+                        return;
+                    }
+
+                    this->inBufferNodes.push(DDConnection {
                         .status            = false,
                         .address           = disconnected_node_address,
-                        .broadcast_counter = this->broadcast_counter
-                        
                     });
-                    MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_NODE_CONNECTIONS);
+                    MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_CONNECTION_UPDATE);
                 } break;
 
-                default: {
-                    this->serial_send_debug("recv_from_mac: WHAT?");
+                case DD_CONNECTION_LOST: {
                 } break;
             }
         }
         else {
             switch(dd_packet.header.type) {
                 case DD_RT_INIT: {
-                    this->serial_send_debug("recv_from_mac: DD_RT_INIT");
                     uint64_t broadcast_counter_received;
-
                     if (!dd_packet.extractRT_INIT(broadcast_counter_received) ||
                         broadcast_counter_received <= this->broadcast_counter) {
                         return;
                     }
 
-                    this->rt_connect(broadcast_counter_received, dd_packet.header.source);
+                    this->serial_send_debug("RECV: DD_RT_INIT");
 
+                    if(this->avoid_rt_init_from_enabled &&
+                            this->avoid_rt_init_from_address == dd_packet.header.source) {
+                        this->serial_send_debug("refused: connection rt_init connection avoid");
+                        return;
+                    }
+
+                    this->rt_connect(broadcast_counter_received, dd_packet.header.source);
                     this->send_rt_ack();
 
                     this->send_rt_init();
                 } break;
 
                 case DD_DATA: {
-                    this->serial_send_debug("recv_from_mac: DD_DATA");
-                    if(this->rt_formed) {
-                        this->send_data(dd_packet.payload, dd_packet.header.origin);
+                    if(dd_packet.header.forward != this->source ||
+                       !this->rt_formed) {
+                        return;
                     }
+                    this->serial_send_debug("RECV: DD_DATA");
+                    this->send_data(dd_packet.payload, dd_packet.header.origin);
                 } break;
 
                 case DD_COMMAND: {
+                    if(dd_packet.header.forward != this->source) {
+                        return;
+                    }
+
                     DDNodeRoute node_route;
                     ManagedBuffer payload;
 
-                    if(!dd_packet.extractCOMMAND(node_route, payload)) {
+                    if(dd_packet.header.forward != this->source || 
+                       !dd_packet.extractCOMMAND(node_route, payload)) {
                         return;
                     }
 
                     if(node_route.size == 0) {
-                        // I am the destination, the packet is for me
+                        this->serial_send_debug("RECV: DD_COMMAND, for me");
                         this->inBufferPackets.push(payload);
                         MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_PACKET_RECEIVED); 
 
 
                     } else {
-                        // I am not the destination
+                        this->serial_send_debug("RECV: DD_COMMAND, to forward");
                         uint32_t destination = node_route.take();
 
                         this->send_command(
@@ -718,45 +788,52 @@
                 } break;
 
                 case DD_RT_ACK: {
-                    this->serial_send_debug("recv_from_mac: DD_RT_ACK");
+                    if(dd_packet.header.forward != this->source ||
+                       !this->rt_formed) {
+                        return;
+                    }
+
                     DDNodeRoute node_route;
                     uint64_t broadcast_counter;
 
                     if(!dd_packet.extractRT_ACK(node_route, broadcast_counter) ||
-                    broadcast_counter != this->broadcast_counter) {
+                       broadcast_counter != this->broadcast_counter) {
                         return;
                     }
-
+                    this->serial_send_debug("RECV: DD_RT_ACK");
                     node_route.push(this->source);
-
                     this->send_rt_ack(node_route, dd_packet.header.origin);
                 } break;
 
                 case DD_JOIN: {
-                    this->serial_send_debug("recv_from_mac: DD_JOIN");
-                    this->send_rt_init();
-                } break;
-
-                case DD_LEAVE: {
-                    this->serial_send_debug("recv_from_mac: DD_LEAVE");
                     if(!this->rt_formed) {
                         return;
                     }
+                    this->serial_send_debug("RECV: DD_JOIN");
 
-                    uint32_t disconnected_node_address;
-                    uint64_t broadcast_counter;
+                    DDNodeRoute node_route;
 
-                    if(!dd_packet.extractLEAVE(disconnected_node_address, broadcast_counter) ||
-                    broadcast_counter != this->broadcast_counter) {
+                    node_route.push(this->source);
+
+                    this->send_join_request(dd_packet.header.origin);
+                } break;
+
+                case DD_LEAVE: {
+                    if(dd_packet.header.forward != this->source ||
+                       !this->rt_formed) {
                         return;
                     }
+                    this->serial_send_debug("RECV: DD_LEAVE");
 
                     this->send_leave(dd_packet.payload, dd_packet.header.origin);
                 } break;
 
-                default: {
-                    this->serial_send_debug("recv_from_mac: WHAT?");
-                } break;
+                case DD_CONNECTION_LOST: {
+                    if(this->rt_formed &&
+                       dd_packet.header.source == this->rely) {
+                        this->rt_disconnect();
+                    }
+                }
             }
         }
     }
@@ -769,24 +846,26 @@
         ManagedBuffer packet = dd_packet.toManagedBuffer();
         switch(dd_packet.header.type) {
             case DD_RT_INIT:
-                this->serial_send_debug("send via mac: DD_RT_INIT");
+                this->serial_send_debug("SEND: DD_RT_INIT");
                 break;
             case DD_DATA:
-                this->serial_send_debug("send via mac: DD_DATA");
+                this->serial_send_debug("SEND: DD_DATA");
                 break;
             case DD_COMMAND:
-                this->serial_send_debug("send via mac: DD_COMMAND");
+                this->serial_send_debug("SEND: DD_COMMAND");
                 break;
             case DD_RT_ACK:
-                this->serial_send_debug("send via mac: DD_RT_ACK"); break;
+                this->serial_send_debug("SEND: DD_RT_ACK");
+                break;
             case DD_JOIN:
-                this->serial_send_debug("send via mac: DD_JOIN");
+                this->serial_send_debug("SEND: DD_JOIN");
                 break;
             case DD_LEAVE:
-                this->serial_send_debug("send via mac: DD_LEAVE");
+                this->serial_send_debug("SEND: DD_LEAVE");
                 break;
-            default:
-                this->serial_send_debug("send via mac: WHAT?");
+            case DD_CONNECTION_LOST:
+                this->serial_send_debug("SEND: DD_CONNECTION_LOST");
+                break;
         }
         this->mac_layer.send(packet.getBytes(), packet.length(), dd_packet.header.forward);
 
@@ -835,10 +914,7 @@
     }
 
     void NetworkLayer::recv_from_serial(MicroBitEvent) {
-        ManagedBuffer serial_received_buffer = this->serial_received_buffer;
-
-        
-        uint8_t code = serial_received_buffer.getByte(0);
+        uint8_t code = this->serial_received_buffer.getByte(0);
 
         if(code == DD_SERIAL_INIT) {
             uint8_t mode = DD_SERIAL_INIT_ACK;
@@ -850,75 +926,87 @@
                 NETWORK_LAYER_SERIAL_ROUTING_TABLE,
                 ManagedBuffer(&mode, sizeof(mode))
             );
-            if(this->serial_send_state != DD_SERIAL_SEND_NONE) {
+
+            if(this->serial_send_state != DD_SERIAL_READY_TO_SEND) {
                 this->serial->send(
                     NETWORK_LAYER_INTERNALS,
                     NETWORK_LAYER_SERIAL_ROUTING_TABLE,
-                    this->serial_in_sending_buffer
+                    this->serial_packet_in_send
                 );
             }
 
             this->serial_initiated = true;
+
+            return;
         }
         
-        else {
-            switch(this->serial_send_state) {
-                case DD_SERIAL_SEND_NONE:
-                    return;
+        switch(this->serial_send_state) {
+            case DD_SERIAL_SEND_CLEAR:
+                this->send_rt_init();
 
-                case DD_SERIAL_SEND_CLEAR:
-                    this->send_rt_init();
+                break;
 
-                    break;
+            case DD_SERIAL_SEND_GET: {
+                DDNodeRoute node_route;
 
-                case DD_SERIAL_SEND_GET: {
-                    DDNodeRoute node_route;
+                if(serial_received_buffer == ManagedBuffer::EmptyPacket) {
+                    this->serial_route_found = false;
+                }
 
-                    if(serial_received_buffer == ManagedBuffer::EmptyPacket) {
-                        this->serial_route_found = false;
+                else {
+                    this->serial_route_found = *serial_received_buffer.getBytes();
+
+                    if(this->serial_route_found) {
+
+                        DDNodeRoute node_route = DDNodeRoute {
+                            .size = (serial_received_buffer.length()-1) / sizeof(uint32_t),
+                            .addresses = ManagedBuffer(
+                                serial_received_buffer.getBytes()+1,
+                                (serial_received_buffer.length()-1)
+                            )
+                        };
+
+                        uint32_t destination = node_route.take();
+
+                        this->send_command(
+                            this->serial_send_get_payload,
+                            node_route,
+                            destination
+                        );
                     }
+                }
 
-                    else {
-                        this->serial_route_found = *serial_received_buffer.getBytes();
+                this->serial_wait_route_found = false;
 
-                        if(this->serial_route_found) {
+            } break;
 
-                            DDNodeRoute node_route = DDNodeRoute {
-                                .size = (serial_received_buffer.length()-1) / sizeof(uint32_t),
-                                .addresses = ManagedBuffer(
-                                    serial_received_buffer.getBytes()+1,
-                                    (serial_received_buffer.length()-1)
-                                )
-                            };
+            case DD_SERIAL_SEND_PUT:
+                this->inBufferNodes.push(DDConnection {
+                    .status            = true,
+                    .address           = this->serial_send_put_origin
+                });
 
-                            uint32_t destination = node_route.take();
+                MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_CONNECTION_UPDATE);
 
-                            this->send_command(
-                                this->serial_send_get_payload,
-                                node_route,
-                                destination
-                            );
-                        }
-                    }
+                break;
 
-                    this->serial_wait_route_found = false;
+            case DD_SERIAL_READY_TO_SEND:
+                break;
 
-                } break;
-
-                case DD_SERIAL_SEND_PUT:
-                    this->inBufferNodes.push(DDNodeConnection {
-                        .status            = true,
-                        .address           = this->serial_send_put_origin,
-                        .broadcast_counter = broadcast_counter
-                    });
-
-                    MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_NODE_CONNECTIONS);
-
-                    break;
-            }
-            
-            this->serial_send_state = DD_SERIAL_SEND_NONE;
         }
+        
+        this->serial_send_state = DD_SERIAL_READY_TO_SEND;
+    }
+
+    void NetworkLayer::send_to_serial(MicroBitEvent) {
+        this->serial_packet_in_send = this->outSerialPackets.front();
+        this->outSerialPackets.pop();
+
+        this->serial->send(
+            NETWORK_LAYER_INTERNALS,
+            NETWORK_LAYER_SERIAL_ROUTING_TABLE,
+            this->serial_packet_in_send
+        );
     }
 
 
@@ -936,30 +1024,39 @@
     }
 
     void NetworkLayer::rt_disconnect() {
+        this->serial_send_debug("rt_DISCONNETCTED");
+
         this->rt_formed = false;
-        this->rely = 0;
-        if (this->broadcast_counter > 0) this->broadcast_counter--;
 
         std::queue<DDPacket> emptyOutBufferPackets;
 
         std::swap(this->outBufferPackets, emptyOutBufferPackets);
 
-        this->uBit->display.print("N");
+        this->send_connection_lost();
 
-        MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_RT_BROKEN);
+        this->inBufferNodes.push(DDConnection {
+            .status            = false,
+            .address           = this->rely,
+        });
+
+        MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_CONNECTION_UPDATE);
     }
 
-    void NetworkLayer::rt_connect(uint64_t broadcast_counter, uint32_t rely) {
+    void NetworkLayer::rt_connect(uint64_t broadcast_counter, uint32_t source) {
+        this->serial_send_debug("rt_CONNECTED");
         this->broadcast_counter = broadcast_counter;
-        this->rely = rely;
+
+        this->rely = source;
         this->rt_formed = true;
 
-        this->uBit->display.print("C");
-
-        MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_RT_INIT);
+        this->inBufferNodes.push(DDConnection {
+            .status            = true,
+            .address           = this->rely,
+        });
+        MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_CONNECTION_UPDATE);
     }
 
-    void NetworkLayer::incr_broadcast_counter() {
+    void NetworkLayer::incr_broadcast_counter(MicroBitEvent) {
         this->broadcast_counter++;
         this->put_store_broadcast_counter();
         this->serial_clear_node_routes();
@@ -968,19 +1065,14 @@
     void NetworkLayer::get_store_broadcast_counter() {
         KeyValuePair* stored_broadcast_counter = this->uBit->storage.get("bc");
 
-        if(stored_broadcast_counter == NULL) {
-            this->broadcast_counter = 1;
-        } else {
-            uint64_t broadcast_counter;
-
+        if(stored_broadcast_counter != NULL) {
+            this->serial_send_debug("get bc non null");
             memcpy(
-                (uint8_t*) &broadcast_counter,
-                stored_broadcast_counter->value, sizeof(broadcast_counter)
+                (uint8_t*) &this->broadcast_counter,
+                stored_broadcast_counter->value, sizeof(this->broadcast_counter)
             );
 
             delete stored_broadcast_counter;
-
-            this->broadcast_counter=broadcast_counter;
         }
     }
 
@@ -1000,16 +1092,10 @@
     }
 
     void NetworkLayer::serial_send(ManagedBuffer packet) {
-        this->serial_in_sending_buffer = packet;
-
-        this->serial->send(
-            NETWORK_LAYER_INTERNALS,
-            NETWORK_LAYER_SERIAL_ROUTING_TABLE,
-            packet
-        );
+        this->outSerialPackets.push(packet);
     }
 
-    void NetworkLayer::serial_send_debug(ManagedBuffer message) {
+    inline void NetworkLayer::serial_send_debug(ManagedBuffer message) {
         if(this->debug && this->serial != NULL)
             this->serial->send(101, 1, message);
     }
@@ -1033,11 +1119,10 @@
             &destination,
             length); offset += length;
 
-        this->serial_send_state = DD_SERIAL_SEND_GET;
         this->serial_send(packet);
     }
 
-    void NetworkLayer::serial_put_node_route(DDNodeRoute node_route) {
+    void NetworkLayer::serial_put_node_route(DDNodeRoute node_route, uint32_t destination) {
         uint8_t mode = DD_SERIAL_PUT;
         ManagedBuffer packet(sizeof(mode) + node_route.addresses.length());
 
@@ -1056,7 +1141,7 @@
             node_route.addresses.getBytes(),
             length); offset += length;
 
-        this->serial_send_state = DD_SERIAL_SEND_PUT;
+        this->serial_send_put_origin = destination;
         this->serial_send(packet);
     }
 
@@ -1065,7 +1150,6 @@
 
         ManagedBuffer packet(&mode, sizeof(mode));
 
-        this->serial_send_state = DD_SERIAL_SEND_CLEAR;
         this->serial_send(packet);
     }
 
@@ -1096,8 +1180,8 @@
                     .forward = NETWORK_BROADCAST,
                     .origin  = 0,
                     .payload = ManagedBuffer(
-                        (uint8_t*)&broadcast_counter,
-                        sizeof(broadcast_counter))
+                        (uint8_t*)&this->broadcast_counter,
+                        sizeof(this->broadcast_counter))
                 }
             )
         );
@@ -1107,8 +1191,6 @@
         this->send_rt_ack(DDNodeRoute::of(this->source), this->source);
     }
     void NetworkLayer::send_rt_ack(DDNodeRoute node_route, uint32_t origin) {
-        uint64_t broadcast_counter = this->broadcast_counter;
-
         this->outBufferPackets.push(
             DDPacket::of (
                 this,
@@ -1119,8 +1201,8 @@
                     .payload = DDPayloadWithNodeRoute::of(
                         node_route,
                         ManagedBuffer(
-                            (uint8_t*)&broadcast_counter,
-                            sizeof(broadcast_counter)
+                            (uint8_t*)&this->broadcast_counter,
+                            sizeof(this->broadcast_counter)
                         )
                     ).toManagedBuffer()
                 }
@@ -1129,16 +1211,18 @@
     }
 
     void NetworkLayer::send_join_request() {
+        this->send_join_request(this->source);
+    }
+
+    void NetworkLayer::send_join_request(uint32_t origin) {
         this->outBufferPackets.push(
             DDPacket::of (
                 this,
                 DDPacketData {
                     .type    = DD_JOIN,
-                    .forward = NETWORK_BROADCAST,
-                    .origin  = this->source,
-                    .payload = DDNodeRoute::of(
-                        this->source
-                    ).toManagedBuffer()
+                    .forward = (this->rt_formed) ? this->rely : NETWORK_BROADCAST,
+                    .origin  = origin,
+                    .payload = ManagedBuffer()
                 }
             )
         );
@@ -1178,24 +1262,24 @@
     }
 
     void NetworkLayer::send_leave() {
+        if(this->sink_mode) {
+            this->inBufferNodes.push(DDConnection {
+                .status            = false,
+                .address           = this->sending_to,
+            });
+            MicroBitEvent(NETWORK_LAYER, NETWORK_LAYER_CONNECTION_UPDATE);
+
+            return;
+        }
+
         ManagedBuffer payload = ManagedBuffer(
-            sizeof(this->sending_to) + sizeof(this->broadcast_counter)
+            sizeof(this->sending_to)
         );
 
-        uint64_t offset = 0;
-        uint64_t length = 0;
-
-        length = sizeof(this->sending_to);
         memcpy(
-            payload.getBytes() + offset,
+            payload.getBytes(),
             (uint8_t*) &this->sending_to,
-            length); offset += length;
-
-        length = sizeof(this->broadcast_counter);
-        memcpy(
-            payload.getBytes() + offset,
-            (uint8_t*) &this->broadcast_counter,
-            length); offset += length;
+            sizeof(this->sending_to));
 
         this->send_leave(payload, this->source);
     }
@@ -1211,5 +1295,25 @@
                 }
             )
         );
+    }
+
+    void NetworkLayer::send_connection_lost() {
+        this->outBufferPackets.push(
+            DDPacket::of (
+                this,
+                DDPacketData {
+                    .type    = DD_CONNECTION_LOST,
+                    .forward = NETWORK_BROADCAST,
+                    .origin  = this->source,
+                    .payload = ManagedBuffer()
+                }
+            )
+        );
+    }
+
+
+    void NetworkLayer::avoid_rt_init_from(uint32_t address) {
+        this->avoid_rt_init_from_enabled = true;
+        this->avoid_rt_init_from_address = address;
     }
 // }
