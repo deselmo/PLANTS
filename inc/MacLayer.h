@@ -9,7 +9,7 @@
 
 // definition of retransmission parameters
 #define MAC_LAYER_RETRANSMISSION_ATTEMPT 5  // number of time we try to resend a packet
-#define MAC_LAYER_RETRANSMISSION_TIME 200   // delay between two retransmission
+#define MAC_LAYER_RETRANSMISSION_TIME 20   // delay between two retransmission
 
 //result codes
 #define MAC_LAYER_PACKET_TOO_LARGE 1        // the payload of the packet was too large
