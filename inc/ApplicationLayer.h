@@ -144,10 +144,11 @@ class ApplicationLayer{
 
 public:
     
-    ApplicationLayer(MicroBit*,NetworkLayer*,SerialCom*,bool);
+    ApplicationLayer(MicroBit*,NetworkLayer*);
     void send_app_data(ManagedString sensor, float value);
     void sleep(uint32_t);
-    void init();
+    void init(SerialCom *, bool);
+    void addSensor(ManagedString, float (*)(Sensor *));
 
 };
 

@@ -1,11 +1,8 @@
 #include "ApplicationLayer.h"
 
-ApplicationLayer::ApplicationLayer(MicroBit* uBit, NetworkLayer* nl, SerialCom* serial, bool sink_mode){
+ApplicationLayer::ApplicationLayer(MicroBit* uBit, NetworkLayer* nl){
     this->uBit = uBit;
     this->nl = nl;
-    this->serial = serial;
-    this->sink_mode = sink_mode;
-    this->connected = sink_mode ? true : false;
 }
 
 Message Message::from(DDMessage msg){
@@ -55,10 +52,13 @@ float thermomether_loop(Sensor *par){
 
 }
 
-void ApplicationLayer::init(){
+void ApplicationLayer::init(SerialCom *serial, bool sink){
     this->uBit->messageBus.listen(NETWORK_LAYER, NETWORK_LAYER_PACKET_RECEIVED, this, &ApplicationLayer::recv_from_network);
     this->uBit->messageBus.listen(NETWORK_LAYER, NETWORK_LAYER_CONNECTION_UPDATE, this, &ApplicationLayer::update_connection_status);
-    this->nl->init();
+    this->serial = serial;
+    this->sink_mode = sink;
+    this->connected = sink_mode ? true : false;
+    this->nl->init(serial, sink);
     if(this->serial)
     {
         this->serial->addListener(APPLICATION_ID, SENSING_REQ, this, &ApplicationLayer::recv_sensing_req);
@@ -448,4 +448,23 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
         create_fiber(&send_new_sample, (void *)tmp);
     }
     delete m.payload;
+}
+
+
+void ApplicationLayer::addSensor(ManagedString name, float (*f)(Sensor *)){
+    Sensor *s = new Sensor;
+    s->active_loop = false;
+    s->min_value = false;
+    s->max_value = false;
+    s->sensing_rate = SENSING_INTERVAL;
+    s->name = name;
+    s->app = this;
+    s->loop = f;
+    sensors.push_back(s);
+    if(connected)
+    {
+        send_microbit_info();
+        s->active_loop = true;
+        create_fiber(&sensing_loop, (void *)s);
+    }
 }
