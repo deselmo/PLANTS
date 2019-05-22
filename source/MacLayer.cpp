@@ -16,7 +16,7 @@ MacLayer::MacLayer(MicroBit* uBit, SerialCom* serial, int transmitPower){
 void MacLayer::init(){
     this->uBit->radio.enable();
     this->uBit->seedRandom();
-
+    
     uBit->messageBus.listen(MAC_LAYER, MAC_LAYER_PACKET_READY_TO_SEND, this, &MacLayer::send_to_radio);
     uBit->messageBus.listen(MICROBIT_ID_RADIO, MICROBIT_RADIO_EVT_DATAGRAM, this, &MacLayer::recv_from_radio);
     fiber_add_idle_component(this);
@@ -156,6 +156,8 @@ vector<MacBuffer *> * MacLayer::prepareFragment(uint8_t *buffer, int len, uint32
  * deletes 1 MacBuffer if is ACK otherwise put 1 MacBuffer into waiting
  */
 void MacLayer::send_to_radio(MicroBitEvent){
+    if(this->outBuffer.empty()) return;
+
     MacBuffer * toSend = outBuffer.back();
     wait_us(toSend->timewait);
     // if(toSend->timewait > 0)
@@ -230,7 +232,7 @@ void MacLayer::send_to_radio(MicroBitEvent){
     {
         MicroBitEvent evt(MAC_LAYER,10);
     }
-    
+
 }
 //destination sending E 773474883
 //source sending E -1530673668
@@ -591,7 +593,7 @@ void MacLayer::idleTick(){
                             delete mb;
                         delete mbr;
                     }
-                    ++it3;                    
+                    ++it3;
                 }
                 f->fragmented.erase(it2++);
                 delete fp;
