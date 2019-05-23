@@ -32,9 +32,9 @@ void sensing_loop(void *par){
         bool send = true;
         float sensed = sensor->loop(sensor);
         int tmp_sensed = (int)sensed;
-        if(sensor->min_value && tmp_sensed < sensor->min_value_threshold)
+        if(sensor->min_value && tmp_sensed >= sensor->min_value_threshold)
             send = false;
-        if(sensor->max_value && tmp_sensed > sensor->max_value_threshold)
+        if(sensor->max_value && tmp_sensed <= sensor->max_value_threshold)
             send = false;
         if(send)
             sensor->app->send_app_data(sensor->name, sensed);
