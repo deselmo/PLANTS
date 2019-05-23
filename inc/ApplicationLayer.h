@@ -8,15 +8,16 @@
 #include <vector>
 
 //default sensing interval 5 min in milliseconds 
-#define SENSING_INTERVAL 300000
+#define SENSING_INTERVAL 1000
 
 //max waiting time for an ack
 #define ACK_WAITING_TIME 1000
 
 #define APPLICATION_ID 50
+#define DEBUG 123
 
 //Serial messages from raspy to microbit
-/**
+/**ma
  * uint32_t microbit_id
  * string sensor_name
  * byte sample_rate
@@ -142,9 +143,11 @@ class ApplicationLayer{
     friend void sensing_loop(void *);
     friend void send_sensing_req(void *);
 
+    void serial_send_debug(ManagedBuffer);
+
 public:
     
-    ApplicationLayer(MicroBit*,NetworkLayer*);
+    ApplicationLayer(MicroBit*, NetworkLayer*);
     void send_app_data(ManagedString sensor, float value);
     void sleep(uint32_t);
     void init(SerialCom *, bool);
