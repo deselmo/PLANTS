@@ -7,6 +7,7 @@
 #define MICROBIT_YELLOW  2150725565
 #define MICROBIT_WILLIAM 2796262830
 #define MICROBIT_ANDREA  2426823503
+#define MICROBIT_MATTEO  2764293628
 
 
 MicroBit uBit;
@@ -21,7 +22,7 @@ float sens_button(Sensor *sensor){
         switch(microbit_serial_number())
         {
             case MICROBIT_ANDREA:
-                return 1.0;        
+                return 1.0;
             case MICROBIT_WILLIAM:
                 return 2.0;
             default:
@@ -52,6 +53,8 @@ int main() {
         // without debug
         ap.init(&serial, true);
 
+        //nl.init(&serial, true);
+
         uBit.display.print('S');
 
         while(true) {
@@ -76,12 +79,16 @@ int main() {
             nl.avoid_rt_init_from(MICROBIT_YELLOW);
         }
 
+
         // with debug
         // nl.init(&serial, false, true);
 
         // without debug
         ap.init(NULL,false);
-        ap.addSensor("A Button", &sens_button);
+        ap.addSensor("AButton", &sens_button);
+
+        //nl.init();
+
         uBit.display.print("N");
 
         while(true) {
