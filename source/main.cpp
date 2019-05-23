@@ -39,6 +39,113 @@ float sens_button(Sensor *sensor){
     }
 }
 
+int period = SENSING_INTERVAL;
+int stillX = 0;
+int stillY = 0;
+int stillZ = 0;
+int fallX;
+int fallY;
+int fallZ;
+int state = 0;
+
+float sens_accellerometer(Sensor *sensor){
+    float ret = 0;
+    if((int)sensor->sensing_rate != period)
+    {
+        uBit.accelerometer.setPeriod(sensor->sensing_rate);
+        period = sensor->sensing_rate;
+    }
+    int thisX = uBit.accelerometer.getX();
+    int thisY = uBit.accelerometer.getY();
+    int thisZ = uBit.accelerometer.getZ();
+    //I'm still!
+    if(state == 0)
+    {
+        if(abs(stillX - thisX) > 500)
+            state = 1;
+        else if(abs(stillY - thisY) > 500)
+            state = 1;
+        else if(abs(stillZ - thisZ) > 500)
+            state = 1;
+        if(state == 1)
+        {
+            fallX = thisX;
+            fallY = thisY;
+            fallX = thisX;
+            ret = 1;
+        }
+        else
+        {
+            stillX = thisX;
+            stillY = thisY;
+            stillZ = thisZ;
+            ret = 0;
+        }
+    }
+    else if(state == 1)
+    {
+        if(abs(fallX - thisX) > 500)
+        {
+            if(
+                abs(thisX - stillX) < 500 &&
+                abs(thisY - stillY) < 500 &&
+                abs(thisZ - stillZ) < 500
+              )
+            {
+                state = 0;
+                stillX = thisX;
+                stillY = thisY;
+                stillZ = thisZ;
+                ret = 0;
+            }
+            else
+                ret = 1;
+            
+        
+        }
+        else if(abs(fallY - thisY) > 500)
+        {
+            if(
+                abs(thisX - stillX) < 500 &&
+                abs(thisY - stillY) < 500 &&
+                abs(thisZ - stillZ) < 500
+              )
+            {
+                state = 0;
+                stillX = thisX;
+                stillY = thisY;
+                stillZ = thisZ;
+                ret = 0;
+            }
+            else
+                ret = 1;
+        
+        }
+        else if(abs(fallZ - thisZ) > 500)
+        {
+            if(
+                abs(thisX - stillX) < 500 &&
+                abs(thisY - stillY) < 500 &&
+                abs(thisZ - stillZ) < 500
+              )
+            {
+                state = 0;
+                stillX = thisX;
+                stillY = thisY;
+                stillZ = thisZ;
+                ret = 0;
+            }
+            else
+                ret = 1;
+        
+        }
+        fallX = thisX;
+        fallY = thisY;
+        fallZ = thisZ;
+    }
+    return ret;
+}
+
 int main() {
     uBit.init();
     serial.init();
@@ -74,18 +181,23 @@ int main() {
 
     else {
         uBit.display.print("n");
+        //uBit.accelerometer.configure();
+        uBit.accelerometer.setPeriod(SENSING_INTERVAL);
+        uBit.display.scroll("HERE");
 
         if(microbit_serial_number() == MICROBIT_ANDREA) {
             nl.avoid_rt_init_from(MICROBIT_YELLOW);
         }
-
-
+        stillX = uBit.accelerometer.getX();
+        stillY = uBit.accelerometer.getY();
+        stillZ = uBit.accelerometer.getZ();
         // with debug
         // nl.init(&serial, false, true);
 
         // without debug
         ap.init(NULL,false);
         ap.addSensor("AButton", &sens_button);
+        ap.addSensor("accellerometer", &sens_accellerometer);
 
         //nl.init();
 
