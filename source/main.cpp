@@ -94,7 +94,6 @@ float sens_accellerometer(Sensor *sensor){
           }
           else
           {
-              ret = 1;
               state = 2;
           }
         fallX = thisX;
@@ -104,6 +103,10 @@ float sens_accellerometer(Sensor *sensor){
     }
     else if(state == 2)
     {
+        ret = 1;
+        // uBit.display.scroll(thisX - fallX);
+        // uBit.display.scroll(thisY - fallY);
+        // uBit.display.scroll(thisZ - fallZ);
         if(abs(fallX - thisX) > 500)
         {
             uBit.display.scroll("X");
