@@ -1082,7 +1082,8 @@
     void NetworkLayer::incr_broadcast_counter(MicroBitEvent) {
         this->broadcast_counter++;
         this->put_store_broadcast_counter();
-        this->serial_clear_node_routes();
+        this->send_rt_init();
+        // this->serial_clear_node_routes();
     }
 
     void NetworkLayer::get_store_broadcast_counter() {
