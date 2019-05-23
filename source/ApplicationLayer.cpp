@@ -419,6 +419,8 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
                     sensor->max_value = true;
                     sensor->max_value_threshold = max_val;
                 }
+                else if(max == 2)
+                    sensor->max_value = false;
                 if(sample == 1)
                 {
                     if(0 < sample_rate && sample_rate < 100)
