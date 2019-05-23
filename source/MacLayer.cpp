@@ -160,16 +160,6 @@ void MacLayer::send_to_radio(MicroBitEvent){
     if(this->outBuffer.empty()) return;
 
     MacBuffer * toSend = outBuffer.back();
-    wait_us(toSend->timewait);
-    // if(toSend->timewait > 0)
-    // {
-    //     this->uBit->sleep(10);
-    //     toSend->timewait--;
-    //     outBuffer.pop_back();
-    //     outBuffer.insert(outBuffer.begin(), toSend);
-    //     MicroBitEvent evt(MAC_LAYER, MAC_LAYER_PACKET_READY_TO_SEND);
-    //     return;
-    // }
     PacketBuffer p(MICROBIT_RADIO_MAX_PACKET_SIZE);
     uint8_t *payload = p.getBytes();
     int tmp = sizeof(uint8_t);
