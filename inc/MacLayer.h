@@ -8,8 +8,8 @@
 #include <vector>
 
 // definition of retransmission parameters
-#define MAC_LAYER_RETRANSMISSION_ATTEMPT 5  // number of time we try to resend a packet
-#define MAC_LAYER_RETRANSMISSION_TIME 20   // delay between two retransmission
+#define MAC_LAYER_RETRANSMISSION_ATTEMPT 10  // number of time we try to resend a packet
+#define MAC_LAYER_RETRANSMISSION_TIME 64   // delay between two retransmission
 
 //result codes
 #define MAC_LAYER_PACKET_TOO_LARGE 1        // the payload of the packet was too large
@@ -121,6 +121,7 @@ class MacLayer : public MicroBitComponent{
     std::map<uint8_t, MacBufferSent *> waiting_for_ack;
     std::vector<uint32_t> disconnected_destination;
     SerialCom* serial;
+    uint64_t time_shift;
 
     /**
      * Create a list of MacBuffer from the buffer passed the list

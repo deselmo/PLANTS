@@ -10,6 +10,7 @@ MacLayer::MacLayer(MicroBit* uBit, SerialCom* serial, int transmitPower){
     seq_number = 248;
     this->uBit = uBit;
     this->serial = serial;
+    this->time_shift = 0;
     this->uBit->radio.setTransmitPower(transmitPower);
 }
 
@@ -517,7 +518,7 @@ uint32_t MacLayer::getDisconnectedDestination(){
 
 void MacLayer::idleTick(){
     map<uint16_t, MacBuffer *>::iterator it;
-    uint64_t now = system_timer_current_time();
+    uint64_t now = system_timer_current_time() + this->time_shift;
     for(it = waiting.begin(); it != waiting.end();)
     {
         if(it->second->queued)
@@ -527,8 +528,10 @@ void MacLayer::idleTick(){
         else if(it->second->attempt < MAC_LAYER_RETRANSMISSION_ATTEMPT)
         {
             it->second->queued = true;
-            // it->second->timewait = uBit->random(it->second->attempt);
-            it->second->timewait = uBit->random((pow(2, it->second->attempt) - 1) * 100);
+            if(it->second->attempt) {
+                this->time_shift = uBit->random(MAC_LAYER_RETRANSMISSION_TIME / 2) * 2;
+                now += this->time_shift;
+            }
             if(outBuffer.empty())
             {
                 outBuffer.insert(outBuffer.begin(), it->second);
