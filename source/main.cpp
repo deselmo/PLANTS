@@ -84,8 +84,29 @@ float sens_accellerometer(Sensor *sensor){
     }
     else if(state == 1)
     {
+        if(
+            abs(fallX - thisX) > 500 ||
+            abs(fallY - thisY) > 500 ||
+            abs(fallZ - thisZ) > 500
+          )
+          {
+            ;
+          }
+          else
+          {
+              ret = 1;
+              state = 2;
+          }
+        fallX = thisX;
+        fallY = thisY;
+        fallZ = thisZ;
+        ret = 1;
+    }
+    else if(state == 2)
+    {
         if(abs(fallX - thisX) > 500)
         {
+            uBit.display.scroll("X");
             if(
                 abs(thisX - stillX) < 500 &&
                 abs(thisY - stillY) < 500 &&
@@ -105,6 +126,7 @@ float sens_accellerometer(Sensor *sensor){
         }
         else if(abs(fallY - thisY) > 500)
         {
+            uBit.display.scroll("Y");
             if(
                 abs(thisX - stillX) < 500 &&
                 abs(thisY - stillY) < 500 &&
@@ -123,6 +145,7 @@ float sens_accellerometer(Sensor *sensor){
         }
         else if(abs(fallZ - thisZ) > 500)
         {
+            uBit.display.scroll("Z");
             if(
                 abs(thisX - stillX) < 500 &&
                 abs(thisY - stillY) < 500 &&
