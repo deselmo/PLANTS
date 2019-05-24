@@ -413,6 +413,7 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
         }
         if(min == 1)
         {
+            
             memcpy(&min_val, payload + len, sizeof(uint32_t));
             len += sizeof(uint32_t);
         }
@@ -428,6 +429,7 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
             if(sensor->name == s.toManagedString())
             {
                 sensor->sensing = start_sampling;
+                uBit->display.scroll(sensor->sensing);
                 if(min == 1)
                 {
                     uBit->display.scroll((int)min_val);
@@ -449,9 +451,11 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
                         sensor->sensing_rate = 100;
                     else
                         sensor->sensing_rate = sample_rate;
+                    uBit->display.scroll((int)sensor->sensing_rate);
                 }
                 if(!sensor->active_loop && sample_rate != 0 && start_sampling)
                 {
+                    uBit->display.scroll("starting loop");
                     sensor->active_loop = true;
                     create_fiber(&sensing_loop, (void *)sensor);
                 }
