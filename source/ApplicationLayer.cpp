@@ -430,6 +430,7 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
                 sensor->sensing = start_sampling;
                 if(min == 1)
                 {
+                    uBit->display.scroll((int)min_val);
                     sensor->min_value = true;
                     sensor->min_value_threshold = min_val;
                 }
