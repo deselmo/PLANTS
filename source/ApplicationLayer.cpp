@@ -19,6 +19,11 @@ void sensing_loop(void *par){
     Sensor *sensor = (Sensor *)par;
     while(true)
     {
+        if(!sensor->sensing)
+        {
+            sensor->active_loop = false;
+            return;
+        }
         if(sensor->sensing_rate == 0)
         {
             sensor->active_loop = false;
@@ -134,7 +139,7 @@ void ApplicationLayer::update_connection_status_sink(){
             waiting_ack = false;
             ManagedBuffer b(1);
             b[0] = 2;
-            serial->send(APPLICATION_ID, SENSING_RESP, b);
+            serial->send(APPLICATION_ID, serving, b);
         }
     }
 }
@@ -144,8 +149,10 @@ void send_sensing_req(void *par){
     ApplicationLayer *app = tmp->app;
     ManagedBuffer buf = tmp->msg;
     uint8_t *msg = buf.getBytes();
+    uint8_t resp_event;
     uint32_t microbit_id;
     uint32_t sensor_len;
+    uint8_t start_sampling;
     uint8_t sample;
     uint32_t sample_rate;
     uint8_t min;
@@ -155,7 +162,10 @@ void send_sensing_req(void *par){
 
     uint32_t len = 0;
     
-    memcpy(&microbit_id, msg, sizeof(uint32_t));
+    memcpy(&resp_event, msg + len, sizeof(uint8_t));
+    len += sizeof(uint8_t);
+
+    memcpy(&microbit_id, msg + len, sizeof(uint32_t));
     len += sizeof(uint32_t);
 
     memcpy(&sensor_len, msg + len, sizeof(uint32_t));
@@ -164,6 +174,9 @@ void send_sensing_req(void *par){
     uint8_t sensor_name[sensor_len];
     memcpy(sensor_name, msg + len, sensor_len);
     len += sensor_len;
+
+    memcpy(&start_sampling, msg + len, 1);
+    len += 1;
 
     memcpy(&sample, msg + len, 1);
     len += 1;
@@ -192,14 +205,17 @@ void send_sensing_req(void *par){
     delete tmp;
     Message toSend;
     toSend.type = SET_GRADIENT;
-    toSend.len = len - sizeof(uint32_t);
+    toSend.len = len - sizeof(uint32_t) - sizeof(uint8_t);
     toSend.payload = new uint8_t [toSend.len]; 
     uint8_t *payload = toSend.payload;
     len = 0;
-    memcpy(payload,&sensor_len, sizeof(uint32_t));
+    memcpy(payload + len, &sensor_len, sizeof(uint32_t));
     len += sizeof(uint32_t);
     memcpy(payload + len, sensor_name, sensor_len);
     len += sensor_len;
+    
+    memcpy(payload + len, &start_sampling, 1);
+    len += 1;
     memcpy(payload + len, &sample, 1);
     len += 1;
     memcpy(payload + len, &min, 1);
@@ -224,13 +240,14 @@ void send_sensing_req(void *par){
     }
     app->waiting_ack = true;
     app->dest = microbit_id;
+    app->serving = resp_event;
     if(!app->sendMessage(toSend))
     {
         delete []toSend.payload;
         app->waiting_ack = false;
         ManagedBuffer b(1);
         b[0] = 1;
-        app->serial->send(APPLICATION_ID, SENSING_RESP, b);
+        app->serial->send(APPLICATION_ID, app->serving, b);
         return;
     }
 
@@ -244,7 +261,7 @@ void send_sensing_req(void *par){
         ManagedBuffer b(1);
         b[0] = 2;
         app->waiting_ack = false;
-        app->serial->send(APPLICATION_ID, SENSING_RESP, b);
+        app->serial->send(APPLICATION_ID, app->serving, b);
     }
 }
 
@@ -253,7 +270,7 @@ void ApplicationLayer::recv_sensing_req(ManagedBuffer buf){
     {
         ManagedBuffer b(1);
         b[0] = 3;
-        serial->send(APPLICATION_ID, SENSING_RESP, b);
+        serial->send(APPLICATION_ID, buf[0], b);
         return;
     }
     AppAndData *tmp = new AppAndData;
@@ -371,13 +388,16 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
         ManagedBuffer s(size);
         uint8_t *str = s.getBytes();
         memcpy(str, payload + len, size);
-
         len += size;
+
+        uint8_t start_sampling;
         uint8_t sample;
         uint8_t min;
         uint8_t max;
-        memcpy(&sample, payload + len, 1);
 
+        memcpy(&start_sampling, payload + len, 1);
+        len += 1;
+        memcpy(&sample, payload + len, 1);
         len += 1;
         memcpy(&min, payload + len, 1);
         len += 1;
@@ -407,6 +427,7 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
             Sensor *sensor = *it;
             if(sensor->name == s.toManagedString())
             {
+                sensor->sensing = start_sampling;
                 if(min == 1)
                 {
                     sensor->min_value = true;
@@ -427,11 +448,11 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
                         sensor->sensing_rate = 100;
                     else
                         sensor->sensing_rate = sample_rate;
-                    if(!sensor->active_loop && sample_rate != 0)
-                    {
-                        sensor->active_loop = true;
-                        create_fiber(&sensing_loop, (void *)sensor);
-                    }
+                }
+                if(!sensor->active_loop && sample_rate != 0 && start_sampling)
+                {
+                    sensor->active_loop = true;
+                    create_fiber(&sensing_loop, (void *)sensor);
                 }
             }
         }
@@ -448,7 +469,7 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
             waiting_ack = false;
             ManagedBuffer b(1);
             b[0] = 0;
-            serial->send(APPLICATION_ID, SENSING_RESP, b);
+            serial->send(APPLICATION_ID, serving, b);
         }
     }
     else if(m.type == MICRO_INFO)
@@ -476,6 +497,7 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
 void ApplicationLayer::addSensor(ManagedString name, float (*f)(Sensor *)){
     Sensor *s = new Sensor;
     s->active_loop = false;
+    s->sensing = false;
     s->min_value = false;
     s->max_value = false;
     s->sensing_rate = SENSING_INTERVAL;

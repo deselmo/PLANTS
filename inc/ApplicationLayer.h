@@ -17,9 +17,12 @@
 #define DEBUG 123
 
 //Serial messages from raspy to microbit
-/**ma
+/**
+ * 
+ * uint8_t resp_event
  * uint32_t microbit_id
  * string sensor_name
+ * byte start_sampling
  * byte sample_rate
  * byte min_val
  * byte max_val
@@ -67,6 +70,7 @@
  * SET GRADIENT Message
  * 
  * string sensor name
+ * byte start_sampling
  * byte sample_rate
  * byte min_val if set to 1 then we have a min_val gradient
  * byte max_val if set to 1 then we have a max_val gradient
@@ -123,6 +127,7 @@ class ApplicationLayer{
     bool waiting_ack;
     uint32_t dest;
     bool connected;
+    uint8_t serving;
 
     std::vector<Sensor *> sensors;
     bool sink_mode;
@@ -167,6 +172,7 @@ struct Sensor{
 
     ApplicationLayer *app;
     bool active_loop;
+    bool sensing;
 
     bool min_value;
     uint32_t min_value_threshold;
