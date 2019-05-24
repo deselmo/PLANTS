@@ -37,9 +37,9 @@ void sensing_loop(void *par){
         bool send = true;
         float sensed = sensor->loop(sensor);
         int tmp_sensed = (int)sensed;
-        if(sensor->min_value && tmp_sensed >= sensor->min_value_threshold)
+        if(sensor->min_value && tmp_sensed < sensor->min_value_threshold)
             send = false;
-        if(sensor->max_value && tmp_sensed <= sensor->max_value_threshold)
+        if(sensor->max_value && tmp_sensed > sensor->max_value_threshold)
             send = false;
         if(send)
             sensor->app->send_app_data(sensor->name, sensed);
@@ -429,7 +429,6 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
             if(sensor->name == s.toManagedString())
             {
                 sensor->sensing = start_sampling;
-                uBit->display.scroll(sensor->sensing);
                 if(min == 1)
                 {
                     uBit->display.scroll((int)min_val);
@@ -451,11 +450,9 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
                         sensor->sensing_rate = 100;
                     else
                         sensor->sensing_rate = sample_rate;
-                    uBit->display.scroll((int)sensor->sensing_rate);
                 }
                 if(!sensor->active_loop && sample_rate != 0 && start_sampling)
                 {
-                    uBit->display.scroll("starting loop");
                     sensor->active_loop = true;
                     create_fiber(&sensing_loop, (void *)sensor);
                 }

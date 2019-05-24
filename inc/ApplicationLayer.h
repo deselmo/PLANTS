@@ -175,9 +175,9 @@ struct Sensor{
     bool sensing;
 
     bool min_value;
-    uint32_t min_value_threshold;
+    int min_value_threshold;
     bool max_value;
-    uint32_t max_value_threshold;
+    int max_value_threshold;
     uint32_t sensing_rate;
     float (*loop)(Sensor *);
 };
