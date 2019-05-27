@@ -62,9 +62,7 @@ void ApplicationLayer::init(SerialCom *serial, bool sink){
         this->serial->addListener(APPLICATION_ID, SENSING_REQ, this, &ApplicationLayer::recv_sensing_req);
     }
     else
-    {
         this->nl->init(serial, sink);
-    }
 }
 
 void ApplicationLayer::sleep(uint32_t time){
