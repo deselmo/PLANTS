@@ -210,7 +210,6 @@ int main() {
         uBit.display.print("n");
         //uBit.accelerometer.configure();
         uBit.accelerometer.setPeriod(SENSING_INTERVAL);
-        uBit.display.scroll("HERE");
 
         if(microbit_serial_number() == MICROBIT_ANDREA) {
             nl.avoid_rt_init_from(MICROBIT_YELLOW);
