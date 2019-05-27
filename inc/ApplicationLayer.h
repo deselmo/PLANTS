@@ -11,7 +11,7 @@
 #define SENSING_INTERVAL 1000
 
 //max waiting time for an ack
-#define ACK_WAITING_TIME 1000
+#define ACK_WAITING_TIME 2000
 
 #define APPLICATION_ID 50
 #define DEBUG 123

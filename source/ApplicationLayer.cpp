@@ -106,7 +106,6 @@ void ApplicationLayer::update_connection_status_sink(){
         serial->send(APPLICATION_ID, DISCONNECTED_PLANT, b);
         if(waiting_ack && info.address == dest)
         {
-            uBit->display.print("R");
             waiting_ack = false;
             ManagedBuffer b(1);
             b[0] = 2;
@@ -225,7 +224,7 @@ void send_sensing_req(void *par){
     
     delete []toSend.payload;
     uint32_t start = system_timer_current_time();
-    while(app->waiting_ack && start - system_timer_current_time() < ACK_WAITING_TIME)
+    while(app->waiting_ack && system_timer_current_time() - start < ACK_WAITING_TIME)
         app->uBit->sleep(50);
     if(app->waiting_ack)
     {
