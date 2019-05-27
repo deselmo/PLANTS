@@ -106,6 +106,7 @@ void ApplicationLayer::update_connection_status_sink(){
         serial->send(APPLICATION_ID, DISCONNECTED_PLANT, b);
         if(waiting_ack && info.address == dest)
         {
+            uBit->display.print("R");
             waiting_ack = false;
             ManagedBuffer b(1);
             b[0] = 2;
