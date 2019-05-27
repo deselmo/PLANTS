@@ -49,15 +49,6 @@ void sensing_loop(void *par){
     }
 }
 
-float humidity_loop(Sensor *par){
-    
-}
-
-
-
-float thermomether_loop(Sensor *par){
-
-}
 
 void ApplicationLayer::init(SerialCom *serial, bool sink){
     this->uBit->messageBus.listen(NETWORK_LAYER, NETWORK_LAYER_PACKET_RECEIVED, this, &ApplicationLayer::recv_from_network);
@@ -73,25 +64,6 @@ void ApplicationLayer::init(SerialCom *serial, bool sink){
     else
     {
         this->nl->init(serial, sink);
-        Sensor * tmp = new Sensor;
-        tmp->name = "humidity";
-        tmp->app = this;
-        tmp->active_loop = false;
-        tmp->min_value = false;
-        tmp->max_value = false;
-        tmp->sensing_rate = 0;
-        tmp->loop = humidity_loop;
-        sensors.push_back(tmp);
-
-        tmp = new Sensor;
-        tmp->name = "thermometer";
-        tmp->app = this;
-        tmp->active_loop = false;
-        tmp->min_value = false;
-        tmp->max_value = false;
-        tmp->sensing_rate = 0;
-        tmp->loop = thermomether_loop;
-        sensors.push_back(tmp);
     }
 }
 
@@ -431,7 +403,6 @@ void ApplicationLayer::recv_from_network(MicroBitEvent e){
                 sensor->sensing = start_sampling;
                 if(min == 1)
                 {
-                    uBit->display.scroll((int)min_val);
                     sensor->min_value = true;
                     sensor->min_value_threshold = min_val;
                 }

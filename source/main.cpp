@@ -39,6 +39,13 @@ float sens_button(Sensor *sensor){
     }
 }
 
+
+float humidity_loop(Sensor *){
+    float x = uBit.io.P0.getAnalogValue();
+    x = 1023 - x;
+    return x*100./1023.;
+}
+
 int period = SENSING_INTERVAL;
 int stillX = 0;
 int stillY = 0;
@@ -104,12 +111,8 @@ float sens_accellerometer(Sensor *sensor){
     else if(state == 2)
     {
         ret = 1;
-        // uBit.display.scroll(thisX - fallX);
-        // uBit.display.scroll(thisY - fallY);
-        // uBit.display.scroll(thisZ - fallZ);
         if(abs(fallX - thisX) > 500)
         {
-            uBit.display.scroll("X");
             if(
                 abs(thisX - stillX) < 500 &&
                 abs(thisY - stillY) < 500 &&
@@ -129,7 +132,6 @@ float sens_accellerometer(Sensor *sensor){
         }
         else if(abs(fallY - thisY) > 500)
         {
-            uBit.display.scroll("Y");
             if(
                 abs(thisX - stillX) < 500 &&
                 abs(thisY - stillY) < 500 &&
@@ -148,7 +150,6 @@ float sens_accellerometer(Sensor *sensor){
         }
         else if(abs(fallZ - thisZ) > 500)
         {
-            uBit.display.scroll("Z");
             if(
                 abs(thisX - stillX) < 500 &&
                 abs(thisY - stillY) < 500 &&
@@ -224,6 +225,7 @@ int main() {
         ap.init(NULL,false);
         ap.addSensor("AButton", &sens_button);
         ap.addSensor("accellerometer", &sens_accellerometer);
+        ap.addSensor("humidity",&humidity_loop);
 
         //nl.init();
 
