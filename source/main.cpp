@@ -185,7 +185,7 @@ int main() {
         // nl.init(&serial, true, true);
 
         // without debug
-        ap.init(&serial, true);
+        ap.init("sink", &serial, true);
 
         //nl.init(&serial, true);
 
@@ -221,9 +221,16 @@ int main() {
         // nl.init(&serial, false, true);
 
         // without debug
-        ap.init(NULL,false);
+        if(microbit_serial_number() == MICROBIT_ANDREA)
+            ap.init("A", NULL, false);
+        else if(microbit_serial_number() == MICROBIT_WILLIAM)
+            ap.init("W", NULL, false);
+        else if(microbit_serial_number() == MICROBIT_MATTEO)
+            ap.init("M", NULL, false);
+        else
+            ap.init("plant", NULL, false);
         ap.addSensor("AButton", &sens_button);
-        ap.addSensor("accellerometer", &sens_accellerometer);
+        ap.addSensor("accelerometer", &sens_accellerometer);
         ap.addSensor("humidity",&humidity_loop);
 
         //nl.init();

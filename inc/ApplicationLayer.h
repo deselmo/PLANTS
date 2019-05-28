@@ -54,6 +54,7 @@
 
 /**
  * uint32_t microbit_id
+ * string description
  * string [] sensors
  */
 #define NEW_PLANT 4
@@ -99,6 +100,7 @@
 /**
  * MICRO_INFO Message
  * 
+ * string description
  * string [] sensors names
  */
 #define MICRO_INFO 4
@@ -123,6 +125,7 @@ class ApplicationLayer{
     MicroBit *uBit;
     NetworkLayer *nl;
     SerialCom *serial;
+    ManagedString description;
 
     bool waiting_ack;
     uint32_t dest;
@@ -155,7 +158,7 @@ public:
     ApplicationLayer(MicroBit*, NetworkLayer*);
     void send_app_data(ManagedString sensor, float value);
     void sleep(uint32_t);
-    void init(SerialCom *, bool);
+    void init(ManagedString, SerialCom *, bool);
     void addSensor(ManagedString, float (*)(Sensor *));
 
 };

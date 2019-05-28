@@ -50,12 +50,13 @@ void sensing_loop(void *par){
 }
 
 
-void ApplicationLayer::init(SerialCom *serial, bool sink){
+void ApplicationLayer::init(ManagedString desc, SerialCom *serial, bool sink){
     this->uBit->messageBus.listen(NETWORK_LAYER, NETWORK_LAYER_PACKET_RECEIVED, this, &ApplicationLayer::recv_from_network);
     this->uBit->messageBus.listen(NETWORK_LAYER, NETWORK_LAYER_CONNECTION_UPDATE, this, &ApplicationLayer::update_connection_status);
     this->serial = serial;
     this->sink_mode = sink;
     this->connected = sink_mode ? true : false;
+    this->description = desc;
     if(this->sink_mode)
     {
         this->nl->init(serial, sink);
@@ -259,17 +260,25 @@ bool ApplicationLayer::sendMessage(Message msg){
 }
 
 void ApplicationLayer::send_microbit_info(){
-    uint32_t len = sizeof(uint8_t) + sizeof(uint32_t)+sensors.size()*sizeof(uint32_t);
+    uint32_t len = sizeof(uint8_t) + sizeof(uint32_t) + description.length() + 1 + sizeof(uint32_t)+sensors.size()*sizeof(uint32_t);
     std::vector<Sensor *>::iterator it;
     for(it = sensors.begin(); it != sensors.end(); ++it)
         len += (*it)->name.length()+1;
     ManagedBuffer b(len);
     uint8_t *buf = b.getBytes();
-    uint32_t size = sensors.size();
+    uint32_t size = description.length() + 1;
     len = 1;
     buf[0] = MICRO_INFO;
     memcpy(buf + len, &size, sizeof(uint32_t));
     len += sizeof(uint32_t);
+
+    memcpy(buf + len, description.toCharArray(), size);
+    len += size;
+
+    size = sensors.size();
+    memcpy(buf + len, &size, sizeof(uint32_t));
+    len += sizeof(uint32_t);
+
     for(it = sensors.begin(); it != sensors.end(); ++it)
     {
         size = (*it)->name.length() + 1;
