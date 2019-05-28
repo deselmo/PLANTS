@@ -78,7 +78,7 @@
             return false;
         }
 
-        address = * (uint32_t*) this->payload.getBytes() + sizeof(uint32_t);
+        address = * (uint32_t*) this->payload.getBytes();
         return true;
     }
 
