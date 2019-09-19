@@ -173,6 +173,27 @@ float sens_accellerometer(Sensor *sensor){
     return ret;
 }
 
+float sens_gps(Sensor *sensor){
+    return 123456;
+}
+
+float sens_fire(Sensor *sensor){
+    if(uBit.buttonA.isPressed())
+        return 123456;
+    return 0;
+}
+
+float heart_rate(Sensor *sensor){
+    if(uBit.buttonA.isPressed())
+        return 130;
+    return 70;
+
+}
+
+float sens_traffic(Sensor *sensor){
+    return uBit.random(1000);
+}
+
 int main() {
     uBit.init();
     serial.init();
@@ -222,16 +243,26 @@ int main() {
 
         // without debug
         if(microbit_serial_number() == MICROBIT_ANDREA)
-            ap.init("A", NULL, false);
+        {
+            ap.init("A_Cultural_Civics", NULL, false);
+            ap.addSensor("gps", &sens_gps);
+            ap.addSensor("fire", &sens_fire);
+        }
         else if(microbit_serial_number() == MICROBIT_WILLIAM)
-            ap.init("W", NULL, false);
+        {
+            ap.init("W_OTM", NULL, false);
+            ap.addSensor("traffic_sensor", &sens_traffic);
+        }
         else if(microbit_serial_number() == MICROBIT_MATTEO)
-            ap.init("M", NULL, false);
+        {
+            ap.init("M_Clinic", NULL, false);
+            ap.addSensor("heart_rate", &heart_rate)
+        }
         else
             ap.init("plant", NULL, false);
-        ap.addSensor("AButton", &sens_button);
-        ap.addSensor("accelerometer", &sens_accellerometer);
-        ap.addSensor("humidity",&humidity_loop);
+        //ap.addSensor("AButton", &sens_button);
+        //ap.addSensor("accelerometer", &sens_accellerometer);
+        //ap.addSensor("humidity",&humidity_loop);
 
         //nl.init();
 
